@@ -1,0 +1,9 @@
+description: Solar System pipeline
+
+instrument: lsst.obs.subaru.HyperSuprimeCam
+tasks:
+    makeTracklets:
+      class: lsst.solsys.pipe.makeTracklets.MakeTrackletsTask
+      config: 
+        verbose: 1
+        imagerad: 5
