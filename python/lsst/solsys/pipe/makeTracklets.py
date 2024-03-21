@@ -2,39 +2,38 @@ import heliolinx.heliolinx as hl
 import lsst.pex.config
 import lsst.pipe.base
 from lsst.pipe.base import connectionTypes
-import heliolinx.solarsyst_dyn_geo as solardg
 import pandas as pd
 import numpy as np
-
+from . import utils
 
 class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
                                dimensions=["instrument"]):
-    diaSourceTable = connectionTypes.Input(
+    sspDiaSourceInputs = connectionTypes.Input(
         doc="Table of unattributed sources",
         dimensions=["instrument"],
         storageClass="DataFrame",
         name="sspDiaSourceInputs"
     )
-    visitTable = connectionTypes.Input(
+    sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument"],
         storageClass="DataFrame",
         name="sspVisitInputs"
     )
-    trackletSources = connectionTypes.Output(
+    sspTrackletSources = connectionTypes.Output(
         doc="sources that got included in tracklets",
         dimensions=["instrument"],
         storageClass="DataFrame",
         name="sspTrackletSources"
     )
-    tracklets = connectionTypes.Output(
+    sspTracklets = connectionTypes.Output(
         doc="summary data for tracklets",
         dimensions=["instrument"],
         storageClass="DataFrame",
         name="sspTracklets"
     )
-    trk2det = connectionTypes.Output(
-        doc="indices connecting tracklets to trackletSources",
+    sspTrackletToSource = connectionTypes.Output(
+        doc="indices connecting tracklets to sspTrackletSources",
         dimensions=["instrument"],
         storageClass="DataFrame",
         name="sspTrackletToSource"
@@ -122,27 +121,11 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
         doc="Prints monitoring output."
     )
 
-
-def df_to_numpy(df, dtype):
-    sa = np.zeros(len(df), dtype=dtype)
-    for col in df.columns:
-        sa[col] = df[col]
-    return sa
-
-
-def det_to_numpy(df):
-    return df_to_numpy(df, dtype=solardg.hldet)
-
-
-def vis_to_numpy(df):
-    return df_to_numpy(df, dtype=solardg.hlimage)
-
-
 class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
     ConfigClass = MakeTrackletsConfig
     _DefaultName = "makeTracklets"
 
-    def run(self, diaSourceTable, visitTable):
+    def run(self, sspDiaSourceInputs, sspVisitInputs):
         """doc string
            here
         """
@@ -155,14 +138,13 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
             setattr(config, var, getattr(self.config, var))
 
         # convert dataframes to numpy array with dtypes that heliolinc expects
-        diaSourceTable = det_to_numpy(diaSourceTable)
-        visitTable = vis_to_numpy(visitTable)
-
-        (dets, tracklets, trac2det) = hl.makeTracklets(config, diaSourceTable, visitTable)
-        (dets, tracklets, trac2det) = map(pd.DataFrame, [dets, tracklets, trac2det])
+        (dets, tracklets, trac2det) = hl.makeTracklets(config,
+                                                       utils.df2numpy(sspDiaSourceInputs, "hldet"),
+                                                       utils.df2numpy(sspVisitInputs,     "hlimage"),
+                                                      )
 
         # Do something about trailed sources
-        return lsst.pipe.base.Struct(trackletSources=dets,
-                                     tracklets=tracklets,
-                                     trk2det=trac2det
+        return lsst.pipe.base.Struct(sspTrackletSources=dets,
+                                     sspTracklets=tracklets,
+                                     sspTrackletToSource=trac2det
                                      )

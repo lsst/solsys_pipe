@@ -7,3 +7,8 @@ tasks:
       config: 
         verbose: 1
         imagerad: 5
+    link:
+      class: lsst.solsys.pipe.heliolincTask.LinkTask
+      config:
+        verbose: 1
+        MJDref: 60607.74

@@ -101,7 +101,7 @@ elements:
       nested:
         cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
-  ssp_hypothesis:
+  sspHypothesisBundle:
     doc: >
       A hypothesis for the Solar System linking pipeline
     keys:

@@ -1,61 +1,72 @@
 import heliolinx.heliolinx as hl
+import heliolinx.solarsyst_dyn_geo as sdg
 import lsst.pex.config
 import lsst.pipe.base
 from lsst.pipe.base import connectionTypes
+from . import utils
 
-class HeliolincConnections(lsst.pipe.base.PipelineTaskConnections,
-                           dimensions=("instrument", "visitWindow"),
-                           defaultTemplates={"timeSpan": "twoWeeks", "hypothesis": "mainBelt", "orbitType": "bound"}):
-    visitTable = connectionTypes.Input(
-        doc="visit stats plus observer coordinates and source indices",
-        dimensions=("instrument", "visitWindow"),
-        storageClass="SourceCatalog",
-        name = "hlimageCatalog_augmented"
+#
+# pipetask run -p ssp-heliolinc.yaml -b "$REPO" -i u/mjuric/test-small -o u/mjuric/test-small-output --register-dataset-types
+#
+# This task searches tracklets for objects findable by a given bundle of hypothesis.
+#
+# The sspHypothesisBundle ID is resolved to the actual hypotheses (the vector of numbers) by
+# extracting the rows with the same sspHypothesisBundle from a DataFrame stored as
+# sspHypothesisDefinitions data type in the input collection.
+#
+
+class LinkConnections(lsst.pipe.base.PipelineTaskConnections,
+                           dimensions=("instrument", "sspHypothesisBundle")):
+    sspVisitInputs = connectionTypes.PrerequisiteInput(
+        doc="visit stats plus observer coordinates",
+        dimensions=["instrument"],
+        storageClass="DataFrame",
+        name="sspVisitInputs"
     )
-    trackletSources = connectionTypes.Input(
+    sspTrackletSources = connectionTypes.Input(
         doc="sources that got included in tracklets",
-        dimensions=("instrument", "visitWindow"),
-        storageClass="SourceCatalog",
-        name = "trackletSources"
-     )
-    tracklets = connectionTypes.Input(
-        doc="summary data for tracklets",
-        dimensions=("instrument", "visitWindow"),
-        storageClass="SourceCatalog",
-        name = "tracklets"
-     )
-    trk2det = connectionTypes.Input(
-        doc="indices connecting tracklets to trackletSources",
-        dimensions=("instrument", "visitWindow"),
-        storageClass="SourceCatalog",
-        name = "trk2source"
+        dimensions=["instrument"],
+        storageClass="DataFrame",
+        name="sspTrackletSources"
     )
-    radhyp = connectionTypes.PrerequisiteInput(
+    sspTracklets = connectionTypes.Input(
+        doc="summary data for tracklets",
+        dimensions=["instrument"],
+        storageClass="DataFrame",
+        name="sspTracklets"
+    )
+    sspTrackletToSource = connectionTypes.Input(
+        doc="indices connecting tracklets to sspTrackletSources",
+        dimensions=["instrument"],
+        storageClass="DataFrame",
+        name="sspTrackletToSource"
+    )
+    sspHypothesisTable = connectionTypes.PrerequisiteInput(
         doc="hypotheses about asteroids' heliocentric radial motion",
         dimensions=(),
         storageClass="DataFrame",
-        name = "hlradhyp_{hypothesis}",
+        name = "sspHypothesisTable",
     )
-    EarthState = connectionTypes.PrerequisiteInput(
+    sspEarthState = connectionTypes.PrerequisiteInput(
         doc="Heliocentric Cartesian position and velocity for Earth",
         dimensions=(),
         storageClass="DataFrame",
-        name = "EarthState",
+        name = "sspEarthState",
     )
-    summary = connectionTypes.Output(
+    sspLinkage = connectionTypes.Output(
         doc="one line summary of each linkage",
-        dimensions=("instrument", "visitWindow"),
-        storageClass="SourceCatalog",
-        name = "{hypothesis}_hlclust_{orbitType}",
+        dimensions=("instrument", "sspHypothesisBundle"),
+        storageClass="DataFrame",
+        name = "sspLinkage",
     )
-    clust2det = connectionTypes.Output(
+    sspLinkageSources = connectionTypes.Output(
         doc="indices connecting linkages (clusters) to trackletSources",
-        dimensions=("instrument", "visitWindow"),
-        storageClass="SourceCatalog",
-        name = "{hypothesis}_clust2det_{orbitType}",
+        dimensions=("instrument", "sspHypothesisBundle"),
+        storageClass="DataFrame",
+        name = "sspLinkageSources",
     )
 
-class HeliolincConfig(lsst.pex.config.Config):
+class LinkConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkConnections):
     MJDref = lsst.pex.config.Field(
         dtype=float,
         default=0.0,
@@ -65,6 +76,11 @@ class HeliolincConfig(lsst.pex.config.Config):
         dtype=float,
         default=1.0e5,
         doc="Clustering radius for the DBSCAN algorithm, in km."
+        )
+    clustchangerad = lsst.pex.config.Field(
+        dtype=float,
+        default=0.5,
+        doc="Geocentric distance (AU), within which the clustering."
         )
     dbscan_npt = lsst.pex.config.Field(
         dtype=int,
@@ -124,17 +140,32 @@ class HeliolincConfig(lsst.pex.config.Config):
         doc="Prints monitoring output."
         )
 
-class HeliolincTask(lsst.pipe.base.PipelineTask):
-    ConfigClass = HeliolincConfig
-    _DefaultName = "heliolinc"
+class LinkTask(lsst.pipe.base.PipelineTask):
+    ConfigClass = LinkConfig
+    _DefaultName = "link"
 
-    def run(self, visitTable, trackletSources, tracklets ,trk2det, radhyp, EarthState):
+    def run(self, sspVisitInputs, sspTrackletSources, sspTracklets, sspTrackletToSource, sspHypothesisTable, sspEarthState):
         """doc string 
            here
         """
 
-        linkout = hl.heliolinc(self.config, visitTable, trackletSources, tracklets ,trk2det, radhyp, EarthState)
-        
-        return lsst.pipe.base.Struct(summary=linkout[0],
-                                     clust2det=linkout[1]
+        # copy all config parameters from the Task's config object
+        # to heliolinx's native config object.
+        config = hl.HeliolincConfig()
+        allvars = [item for item in dir(hl.HeliolincConfig) if not item.startswith("__")]
+        for var in allvars:
+            setattr(config, var, getattr(self.config, var))
+
+        # convert dataframes to numpy array with dtypes that heliolinc expects
+        (sspLinkage, sspLinkageSources) = hl.heliolinc(config,
+                                                       utils.df2numpy(sspVisitInputs,      "hlimage"),
+                                                       utils.df2numpy(sspTrackletSources,  "hldet"),
+                                                       utils.df2numpy(sspTracklets,        "tracklet"),
+                                                       utils.df2numpy(sspTrackletToSource, "longpair"),
+                                                       utils.df2numpy(sspHypothesisTable,  "hlradhyp"),
+                                                       utils.df2numpy(sspEarthState,       "EarthState")
+                                                      )
+
+        return lsst.pipe.base.Struct(sspLinkage=sspLinkage,
+                                     sspLinkageSources=sspLinkageSources
                                      )
