@@ -66,6 +66,11 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
         default=0,
         doc="Min angular velocity in deg/day"
     )
+    exptime = lsst.pex.config.Field(
+        dtype=float,
+        default=30,
+        doc="FIXME WITH GOOD DOCUMENTATION. Exposure time"
+    )
     minarc = lsst.pex.config.Field(
         dtype=float,
         default=0,
@@ -95,6 +100,16 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
         dtype=float,
         default=14.0,
         doc="Default time to look back before most recent data (days)"
+    )
+    siglenscale = lsst.pex.config.Field(
+        dtype=float,
+        default=0.5,
+        doc="????"
+    )
+    sigpascale = lsst.pex.config.Field(
+        dtype=float,
+        default=1.0,
+        doc="????"
     )
     forcerun = lsst.pex.config.Field(
         dtype=int,
