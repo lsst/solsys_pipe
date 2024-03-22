@@ -7,6 +7,7 @@ from . import utils
 
 #
 # pipetask run -p ssp-heliolinc.yaml -b "$REPO" -i u/mjuric/test-small -o u/mjuric/test-small-output --register-dataset-types
+# pipetask run -p ../pipelines/ssp-link.yaml -b "$REPO" -i u/mjuric/test-small -o u/mjuric/test-small-output -d "sspHypothesisBundle.id in (1, 4)"
 #
 # This task searches tracklets for objects findable by a given bundle of hypothesis.
 #
@@ -43,13 +44,13 @@ class LinkConnections(lsst.pipe.base.PipelineTaskConnections,
     )
     sspHypothesisTable = connectionTypes.PrerequisiteInput(
         doc="hypotheses about asteroids' heliocentric radial motion",
-        dimensions=(),
+        dimensions=["instrument"],
         storageClass="DataFrame",
         name = "sspHypothesisTable",
     )
     sspEarthState = connectionTypes.PrerequisiteInput(
         doc="Heliocentric Cartesian position and velocity for Earth",
-        dimensions=(),
+        dimensions=["instrument"],
         storageClass="DataFrame",
         name = "sspEarthState",
     )
@@ -144,7 +145,13 @@ class LinkTask(lsst.pipe.base.PipelineTask):
     ConfigClass = LinkConfig
     _DefaultName = "link"
 
-    def run(self, sspVisitInputs, sspTrackletSources, sspTracklets, sspTrackletToSource, sspHypothesisTable, sspEarthState):
+    def runQuantum(self, butlerQC, inputRefs, outputRefs):
+        inputs = butlerQC.get(inputRefs)
+        hypothesis_id = butlerQC.quantum.dataId.sspHypothesisBundle.id
+        outputs = self.run(**inputs, sspHypothesisBundle=hypothesis_id)
+        butlerQC.put(outputs, outputRefs)
+
+    def run(self, sspVisitInputs, sspTrackletSources, sspTracklets, sspTrackletToSource, sspHypothesisTable, sspEarthState, sspHypothesisBundle):
         """doc string 
            here
         """

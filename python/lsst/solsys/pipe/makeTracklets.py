@@ -14,7 +14,7 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
         storageClass="DataFrame",
         name="sspDiaSourceInputs"
     )
-    sspVisitInputs = connectionTypes.Input(
+    sspVisitInputs = connectionTypes.PrerequisiteInput(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument"],
         storageClass="DataFrame",
