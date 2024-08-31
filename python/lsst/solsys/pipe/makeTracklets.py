@@ -110,6 +110,11 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
         default=1.0,
         doc="????"
     )
+    max_netl = lsst.pex.config.Field(
+        dtype=int,
+        default=2,
+        doc="Maximum non-exclusive tracklet length"
+    )
     forcerun = lsst.pex.config.Field(
         dtype=int,
         default=0,

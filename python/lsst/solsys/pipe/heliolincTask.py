@@ -135,6 +135,12 @@ class LinkConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkConn
         doc="Maximum value of v_infinity relative to the sun "
         "(must be greater than zero to probe interstellar orbits)"
         )
+    autorun = lsst.pex.config.Field(
+        dtype=int,
+        default=1,
+        doc="Automatically generate reference MJD instead of querying "
+        "the user for it "
+        )
     verbose = lsst.pex.config.Field(
         dtype=int,
         default=0,
