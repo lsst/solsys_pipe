@@ -33,8 +33,10 @@ fi
 # Create repo
 butler create "$REPO" --dimension-config=dimensions.yaml
 
-# Patch butler.yaml
-# This should be fixed in pipetasks (I think)
+# Patch butler.yaml to add file access template for sspHypothesisBundle
+# This should be changed upstream in:
+#    https://github.com/lsst/daf_butler/blob/main/python/lsst/daf/butler/configs/datastores/fileDatastore.yaml#L8
+# once we know what we want.
 patch "$REPO/butler.yaml" butler.yaml.patch
 
 # instruments we care about
