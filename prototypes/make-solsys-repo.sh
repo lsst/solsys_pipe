@@ -21,6 +21,11 @@ if [[ -e "$REPO" ]]; then
 	exit -1
 fi
 
+if ! command -v butler >/dev/null 2>&1; then
+	echo "butler is not on the path. Source and setup the LSST stack first."
+	exit -1
+fi
+
 ##
 ## Now create the repo and the required dimensions
 ##
