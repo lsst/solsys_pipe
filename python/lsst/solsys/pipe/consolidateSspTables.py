@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # This file is part of solsys_pipe.
+=======
+# This file is part of solsys_pipe
+>>>>>>> a908372 (Initial consolidation task)
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
