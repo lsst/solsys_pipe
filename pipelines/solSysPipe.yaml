@@ -1,0 +1,9 @@
+description: |
+  Base Pipeline for Solar System Processing
+
+tasks:
+  consolidateSSP: lsst.solsys.pipe.consolidateSSPTables.consolidateSSPTablesTask
+  makeTracklets: lsst.solsys.pipe.makeTracklets.makeTrackletsTask
+  heliolinc: lsst.solsys.pipe.heliolinc.heliolincTask
+  linkPurify: lsst.solsys.pipe.linkPurify.linkPurifyTask
+  submitToMPC: lsst.solsys.pipe.submitToMPC.submitToMPCTask
