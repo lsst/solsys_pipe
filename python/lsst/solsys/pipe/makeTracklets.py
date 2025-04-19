@@ -5,38 +5,91 @@ from lsst.pipe.base import connectionTypes
 import pandas as pd
 import numpy as np
 from . import utils
+import astropy.units as u
+from datetime import datetime
+
+import lsst.pex.config as pexConfig
+from lsst.pipe.base import Struct, NoWorkFound
+import lsst.pipe.base.connectionTypes as connTypes
+from lsst.verify import Measurement, Datum
+from lsst.verify.tasks import AbstractMetadataMetricTask, MetricTask, MetricComputationError
+
+import lsst.afw.image as afwImage
+import lsst.afw.math as afwMath
+import lsst.pipe.base.connectionTypes as cT
+import numpy as np
+from lsst.pex.config import Config, ConfigField, ConfigurableField, Field
+from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections, Struct
+from lsst.pipe.tasks.background import (
+    FocalPlaneBackground,
+    FocalPlaneBackgroundConfig,
+    MaskObjectsTask,
+    SkyMeasurementTask,
+)
+
+from collections import defaultdict
+import dataclasses
+import functools
+import logging
+import numbers
+import os
+
+import numpy as np
+import pandas as pd
+import astropy.table
+from astro_metadata_translator.headers import merge_headers
+
+import lsst.geom
+import lsst.pex.config as pexConfig
+import lsst.pipe.base as pipeBase
+import lsst.daf.base as dafBase
+from lsst.daf.butler.formatters.parquet import pandas_to_astropy
+from lsst.pipe.base import NoWorkFound, connectionTypes
+import lsst.afw.table as afwTable
+from lsst.afw.image import ExposureSummaryStats, ExposureF
+from lsst.meas.base import SingleFrameMeasurementTask, DetectorVisitIdGeneratorConfig
+from lsst.obs.base.utils import strip_provenance_from_fits_header
+
+from lsst.pipe.tasks.postprocess import TableVStack
+
 
 class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
-                               dimensions=["instrument"]):
+                               dimensions=["instrument", "day_obs"]):
     sspDiaSourceInputs = connectionTypes.Input(
         doc="Table of unattributed sources",
-        dimensions=["instrument"],
+        dimensions=["instrument", "day_obs"],
         storageClass="DataFrame",
-        name="sspDiaSourceInputs"
+        name="dia_source_dayobs"
     )
     sspVisitInputs = connectionTypes.PrerequisiteInput(
         doc="visit stats plus observer coordinates",
-        dimensions=["instrument"],
+        dimensions=["instrument", "day_obs"],
         storageClass="DataFrame",
         name="sspVisitInputs"
     )
     sspTrackletSources = connectionTypes.Output(
         doc="sources that got included in tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
         name="sspTrackletSources"
     )
     sspTracklets = connectionTypes.Output(
         doc="summary data for tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
         name="sspTracklets"
     )
     sspTrackletToSource = connectionTypes.Output(
         doc="indices connecting tracklets to sspTrackletSources",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
         name="sspTrackletToSource"
+    )
+    sspVisitHeliolincInputs = connectionTypes.Output(
+        doc="visit stats plus observer coordinates formatted for heliolinc",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="sspVisitHeliolincInputs",
     )
 
 
@@ -68,7 +121,7 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
     exptime = lsst.pex.config.Field(
         dtype=float,
         default=30,
-        doc="FIXME WITH GOOD DOCUMENTATION. Exposure time"
+        doc="Default exposure time (overriden by sspVisitInputs)"
     )
     minarc = lsst.pex.config.Field(
         dtype=float,
@@ -95,35 +148,30 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
         default=0.5,
         doc="Default maximum Great Circle Residual allowed for a valid tracklet (arcsec)"
     )
-    timespan = lsst.pex.config.Field(
-        dtype=float,
-        default=14.0,
-        doc="Default time to look back before most recent data (days)"
-    )
     siglenscale = lsst.pex.config.Field(
         dtype=float,
         default=0.5,
-        doc="????"
+        doc="Default scaling from trail length to trail length uncertainty"
     )
     sigpascale = lsst.pex.config.Field(
         dtype=float,
         default=1.0,
-        doc="????"
+        doc="Default scaling from trail length to trail angle uncertainty"
     )
     max_netl = lsst.pex.config.Field(
         dtype=int,
         default=2,
         doc="Maximum non-exclusive tracklet length"
     )
-    forcerun = lsst.pex.config.Field(
-        dtype=int,
-        default=0,
-        doc="Pushes through all but the immediately fatal errors."
-    )
     verbose = lsst.pex.config.Field(
         dtype=int,
         default=0,
         doc="Prints monitoring output."
+    )
+    time_offset = lsst.pex.config.Field(
+        dtype=float,
+        default=0,
+        doc="Offset in seconds to change timescale (TAI to UTC, for example)"
     )
 
 class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
