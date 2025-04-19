@@ -86,6 +86,12 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
         storageClass="ArrowAstropy",
         name="ssp_visit_heliolinc_inputs",
     )
+    sspVisitHeliolincInputs = connectionTypes.Output(
+        doc="visit stats plus observer coordinates formatted for heliolinc",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="sspVisitHeliolincInputs",
+    )
 
 
 class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections):
