@@ -1,4 +1,4 @@
-# This file is part of solsys_pipe
+# This file is part of solsys_pipe.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
@@ -26,116 +26,161 @@ consolidates them into a `sspVisitInputs` as defined in `makeTracklets.py`
 """
 
 __all__ = [
-    "ConsolidateSspTablesTask", "ConsolidateSspTablesConfig",
+    "ConsolidateSspTablesTask",
+    "ConsolidateSspTablesConfig",
 ]
 
-import astropy.units as u
-from datetime import datetime
 
-import lsst.pex.config as pexConfig
-from lsst.pipe.base import Struct, NoWorkFound
-import lsst.pipe.base.connectionTypes as connTypes
-from lsst.verify import Measurement, Datum
-from lsst.verify.tasks import AbstractMetadataMetricTask, MetricTask, MetricComputationError
-
-import lsst.afw.image as afwImage
-import lsst.afw.math as afwMath
-import lsst.pipe.base.connectionTypes as cT
-import numpy as np
-from lsst.pex.config import Config, ConfigField, ConfigurableField, Field
-from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections, Struct
-from lsst.pipe.tasks.background import (
-    FocalPlaneBackground,
-    FocalPlaneBackgroundConfig,
-    MaskObjectsTask,
-    SkyMeasurementTask,
-)
-
-from collections import defaultdict
-import dataclasses
-import functools
-import logging
-import numbers
-import os
-
-import numpy as np
-import pandas as pd
-import astropy.table
-from astro_metadata_translator.headers import merge_headers
-
-import lsst.geom
-import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-import lsst.daf.base as dafBase
-from lsst.daf.butler.formatters.parquet import pandas_to_astropy
-from lsst.pipe.base import NoWorkFound, connectionTypes
-import lsst.afw.table as afwTable
-from lsst.afw.image import ExposureSummaryStats, ExposureF
-from lsst.meas.base import SingleFrameMeasurementTask, DetectorVisitIdGeneratorConfig
-from lsst.obs.base.utils import strip_provenance_from_fits_header
-
-# from .functors import CompositeFunctor, Column
-
+from astropy.table import Table
+from lsst.daf.base import DateTime
 from lsst.pipe.tasks.postprocess import TableVStack
 
-# From pipe_tasks/postprocessing!
 
-"""A per-dayobs task which takes `goodSeeingDiff_assocDiaSrc` or
-`goodSeeingDiff_diaSrcTable` from the last 14 (config-settable) days and
-consolidates them into a `sspVisitInputs` as defined in `makeTracklets.py`
-"""
-
-
-class ConsolidateSspTablesConnections(PipelineTaskConnections,
-                                            defaultTemplates={"coaddName": "deepSeeing"},
-                                            dimensions=("instrument", "day_obs")):
-    # connections.inputCatalogs: goodSeeingDiff_diaSrcTable
-    # inputCatalogs = connectionTypes.Input(
-    #     doc="Input per-detector Source Tables",
-    #     name="{catalogType}sourceTable",
-    #     storageClass="ArrowAstropy",
-    #     dimensions=("instrument", "day_obs", "detector"),
-    #     multiple=True,
-    #     deferLoad=True,
-    # )
-    inputCatalogs = connTypes.Input(
-        doc="Our input Source Tables to be concatenated",
-        name="dia_source_detector",
+class ConsolidateSspTablesConnections(
+    pipeBase.PipelineTaskConnections,
+    defaultTemplates={
+        "diaSourceInputName": "goodSeeingDiff_diaSrcTable",
+        "diaSourceOutputName": "diaSourceRolling",
+        "visitSummaryInputName": "finalVisitSummary",
+        "visitInfoOutputName": "visitInfoRolling",
+    },
+    dimensions=("instrument", "day_obs"),
+):
+    inputDiaTables = pipeBase.connectionTypes.Input(
+        doc="Input Source Tables to be concatenated",
+        name="{diaSourceInputName}",
         storageClass="ArrowAstropy",
         dimensions=("instrument", "visit", "detector"),
         multiple=True,
+        deferLoad=True,
     )
-    outputCatalog = connectionTypes.Output(
-        doc="Per-dayobs concatenation of Source Table",
-        name="dia_source_dayobs",
+    inputVisitSummaries = pipeBase.connectionTypes.Input(
+        doc="Per-visit consolidated exposure metadata",
+        name="{visitSummaryInputName}",
+        storageClass="ExposureCatalog",
+        dimensions=("instrument", "visit"),
+        multiple=True,
+        deferLoad=True,
+    )
+    outputDiaTable = pipeBase.connectionTypes.Output(
+        doc="Concatenated Source Table from all day_obs in the input. The day_obs"
+        "dimension would be the day_obs of the latest day_obs in the input.",
+        name="{diaSourceOutputName}",
         storageClass="ArrowAstropy",
-        dimensions=("instrument", "day_obs")
+        dimensions=("instrument", "day_obs"),
+    )
+    outputVisitInfo = pipeBase.connectionTypes.Output(
+        doc="Concatenated Visit Summary from all day_obs in the input. The day_obs"
+        "dimension would be the day_obs of the latest day_obs in the input.",
+        name="{visitInfoOutputName}",
+        storageClass="ArrowAstropy",
+        dimensions=("instrument", "day_obs"),
     )
 
+    def adjust_all_quanta(self, adjuster):
+        """This will drop all quanta but the quantum for the latest day_obs
+        and add the input data from those quanta to the latest day_obs.
+        """
+        # Get all the data_ids to be iterated over.
+        to_do = set(adjuster.iter_data_ids())
 
-class ConsolidateSspTablesConfig(pipeBase.PipelineTaskConfig,
-                                       pipelineConnections=ConsolidateSspTablesConnections):
+        # Dynamically get data_id for the latest day_obs.
+        data_id_latest = max(to_do, key=lambda d: d["day_obs"])
+
+        for data_id in to_do:
+            # data_id has keys: instrument, day_obs.
+            if data_id == data_id_latest:
+                # Skip the latest day_obs. This is the one we want to keep.
+                continue
+            inputs = adjuster.get_inputs(data_id)
+            # Since `multiple=True`, we need to loop over all input Refs.
+            for input_data_id in inputs["inputDiaTables"]:
+                # input_data_id has keys: instrument, visit, detector.
+                # Add the input data taken from current data_id to the latest
+                # day_obs.
+                adjuster.add_input(data_id_latest, "inputDiaTables", input_data_id)
+                # data_id_visit_summary has keys: instrument, visit.
+                # We remove the detector key from data_id in the line below.
+                data_id_visit_summary = input_data_id.subset(dimensions=self.inputVisitSummaries.dimensions)
+                adjuster.add_input(data_id_latest, "inputVisitSummaries", data_id_visit_summary)
+            adjuster.remove_quantum(data_id)
+
+
+class ConsolidateSspTablesConfig(
+    pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateSspTablesConnections
+):
     pass
 
 
 class ConsolidateSspTablesTask(pipeBase.PipelineTask):
-    """Concatenate `sourceTable` list into a per-visit `sourceTable_visit`
-    """
-    _DefaultName = "consolidateDiaSourceTable"
-    ConfigClass = ConsolidateSspTablesConfig
+    """Concatenate `sourceTable` list into a per-dayobs `sourceTable_dayobs`"""
 
-    inputDataset = "sourceTable"
-    outputDataset = "sourceTable_visit"
+    ConfigClass = ConsolidateSspTablesConfig
+    _DefaultName = "consolidateSspTables"
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
-        from .makeWarp import reorderRefs
-
-        detectorOrder = [ref.dataId["detector"] for ref in inputRefs.inputCatalogs]
-        detectorOrder.sort()
-        inputRefs = reorderRefs(inputRefs, detectorOrder, dataIdKey="day_obs")
+        """Concatenate the input source tables into a single output table."""
         inputs = butlerQC.get(inputRefs)
-        self.log.info("Concatenating %s per-dayobs Source Tables",
-                      len(inputs["inputCatalogs"]))
-        table = TableVStack.vstack_handles(inputs["inputCatalogs"])
-        butlerQC.put(pipeBase.Struct(outputCatalog=table), outputRefs)
+        inputDiaTableRefs = inputs["inputDiaTables"]
+        inputVisitSummaryRefs = inputs["inputVisitSummaries"]
 
+        # Let's make the order deterministic by sorting the input Refs.
+        inputDiaTableRefs.sort(key=lambda x: (x.dataId["visit"], x.dataId["detector"]))
+
+        # Sort by visit only since no detector key in visitSummary dataId.
+        inputVisitSummaryRefs.sort(key=lambda x: x.dataId["visit"])
+
+        assert len(inputDiaTableRefs) == len(inputVisitSummaryRefs), (
+            f"Number of inputDiaTableRefs ({len(inputDiaTableRefs)}) does not match number of "
+            f"inputVisitSummaryRefs ({len(inputVisitSummaryRefs)}). This is unexpected."
+        )
+        self.log.info(
+            f"Concatenating {len(inputDiaTableRefs)} per-dayobs Source Tables "
+            f"and {len(inputVisitSummaryRefs)} per-dayobs Visit Summaries"
+        )
+        consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs)
+
+        # A list of dictionaries for each visit.
+        ccdEntries = []
+
+        for visitSummaryRef in inputVisitSummaryRefs:
+            # visitInfo is the same for all elements in visitSummary.
+            visitInfo = visitSummaryRef.get()[0].getVisitInfo()
+
+            # Populate an entry with the visitInfo data.
+            entry = dict(
+                id=visitInfo.id,  # == 'visit' in consolidatedDiaTable.
+                exposureTime=visitInfo.exposureTime,
+                darkTime=visitInfo.darkTime,
+                MJD=visitInfo.date.get(system=DateTime.MJD),
+                UT1=visitInfo.ut1,
+                ERA=visitInfo.era.asDegrees(),
+                boresightRa=visitInfo.boresightRaDec[0].asDegrees(),
+                boresightDec=visitInfo.boresightRaDec[1].asDegrees(),
+                boresightAz=visitInfo.boresightAzAlt[0].asDegrees(),
+                boresightAlt=visitInfo.boresightAzAlt[1].asDegrees(),
+                boresightAirmass=visitInfo.boresightAirmass,
+                boresightRotAngle=visitInfo.boresightRotAngle.asDegrees(),
+                rotType=visitInfo.rotType.value,
+                observatory=str(visitInfo.observatory),
+                airPressure=visitInfo.weather.getAirPressure(),
+                airTemperature=visitInfo.weather.getAirTemperature(),
+                humidity=visitInfo.weather.getHumidity(),
+                instrumentLabel=visitInfo.instrumentLabel,
+                focusZ=visitInfo.focusZ,
+                observationType=visitInfo.observationType,
+                scienceProgram=visitInfo.scienceProgram,
+                observationReason=visitInfo.observationReason,
+                object=visitInfo.object,
+                hasSimulatedContent=visitInfo.hasSimulatedContent,
+            )
+            ccdEntries.append(entry)
+
+        # Make an Astropy table of visitInfo entries.
+        consolidatedVisitInfo = Table(rows=ccdEntries)
+
+        butlerQC.put(
+            pipeBase.Struct(outputDiaTable=consolidatedDiaTable, outputVisitInfo=consolidatedVisitInfo),
+            outputRefs,
+        )
