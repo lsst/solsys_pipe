@@ -196,6 +196,12 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
         # Make an Astropy table of visitInfo entries.
         consolidatedVisitInfo = Table(rows=ccdEntries)
 
+        # Assign units to relevant columns.
+        consolidatedVisitInfo["exposureTime"].unit = u.second
+        consolidatedVisitInfo["MJD"].unit = u.day
+        consolidatedVisitInfo["boresightRa"].unit = u.deg
+        consolidatedVisitInfo["boresightDec"].unit = u.deg
+
         butlerQC.put(
             pipeBase.Struct(outputDiaTable=consolidatedDiaTable, outputVisitInfo=consolidatedVisitInfo),
             outputRefs,
