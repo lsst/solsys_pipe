@@ -177,23 +177,11 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
             entry = dict(
                 id=visitInfo.id,  # == 'visit' in consolidatedDiaTable.
                 exposureTime=visitInfo.exposureTime,
-                darkTime=visitInfo.darkTime,
                 MJD=visitInfo.date.get(system=DateTime.MJD),
-                UT1=visitInfo.ut1,
-                ERA=visitInfo.era.asDegrees(),
                 boresightRa=visitInfo.boresightRaDec[0].asDegrees(),
                 boresightDec=visitInfo.boresightRaDec[1].asDegrees(),
-                boresightAz=visitInfo.boresightAzAlt[0].asDegrees(),
-                boresightAlt=visitInfo.boresightAzAlt[1].asDegrees(),
-                boresightAirmass=visitInfo.boresightAirmass,
-                boresightRotAngle=visitInfo.boresightRotAngle.asDegrees(),
-                rotType=visitInfo.rotType.value,
                 observatory=str(visitInfo.observatory),
-                airPressure=visitInfo.weather.getAirPressure(),
-                airTemperature=visitInfo.weather.getAirTemperature(),
-                humidity=visitInfo.weather.getHumidity(),
                 instrumentLabel=visitInfo.instrumentLabel,
-                focusZ=visitInfo.focusZ,
                 observationType=visitInfo.observationType,
                 scienceProgram=visitInfo.scienceProgram,
                 observationReason=visitInfo.observationReason,
@@ -201,6 +189,9 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
                 hasSimulatedContent=visitInfo.hasSimulatedContent,
             )
             ccdEntries.append(entry)
+
+            # We ideally want the observatory code e.g. X05 for LSST, but
+            # this is not available in visitInfo.
 
         # Make an Astropy table of visitInfo entries.
         consolidatedVisitInfo = Table(rows=ccdEntries)
