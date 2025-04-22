@@ -150,7 +150,7 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
 
             # Populate an entry with the visitInfo data.
             entry = dict(
-                id=visitInfo.id,  # == 'visit' in consolidatedDiaTable.
+                visit=visitInfo.id,  # == 'visit' in consolidatedDiaTable.
                 exposureTime=visitInfo.exposureTime,
                 MJD=visitInfo.date.get(system=DateTime.MJD),
                 boresightRa=visitInfo.boresightRaDec[0].asDegrees(),
