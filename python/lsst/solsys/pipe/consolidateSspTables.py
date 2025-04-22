@@ -32,6 +32,7 @@ __all__ = [
 
 
 import lsst.pipe.base as pipeBase
+from astropy import units as u
 from astropy.table import Table
 from lsst.daf.base import DateTime
 from lsst.pipe.tasks.postprocess import TableVStack
@@ -170,6 +171,12 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
 
         # Make an Astropy table of visitInfo entries.
         consolidatedVisitInfo = Table(rows=ccdEntries)
+
+        # Assign units to relevant columns.
+        consolidatedVisitInfo["exposureTime"].unit = u.second
+        consolidatedVisitInfo["MJD"].unit = u.day
+        consolidatedVisitInfo["boresightRa"].unit = u.deg
+        consolidatedVisitInfo["boresightDec"].unit = u.deg
 
         butlerQC.put(
             pipeBase.Struct(outputDiaTable=consolidatedDiaTable, outputVisitInfo=consolidatedVisitInfo),
