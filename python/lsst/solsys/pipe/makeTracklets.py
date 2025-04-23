@@ -226,6 +226,12 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         sspVisitInputs = sspVisitInputs[['MJD', 'RA', 'Dec', 'exptime']]
         sspVisitInputs['obscode'] = self.config.obscode
         # convert dataframes to numpy array with dtypes that heliolinc expects
+        print(list(sspDiaSourceInputs.columns))
+        # hldet_array = sspDiaSourceInputs.to_numpy()
+        # hlimage_array = sspVisitInputs.to_numpy()
+        # hldet = np.array(list(zip(hldet_array)), dtype=[("hldet", hldet_array.dtype)])
+        # hlimage = np.array(list(zip(hlimage_array)), dtype=[("hlimage", hlimage_array.dtype)])
+        # (dets, tracklets, trac2det) = hl.makeTracklets(config, hldet, hlimage)
         (dets, tracklets, trac2det) = hl.makeTracklets(config,
                                                        utils.make_hldet(sspDiaSourceInputs),
                                                        utils.make_hlimage(sspVisitInputs),
