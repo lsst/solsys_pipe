@@ -72,14 +72,14 @@ class ConsolidateSspTablesConnections(
         doc="Concatenated Source Table from all day_obs in the input. The day_obs"
         "dimension would be the day_obs of the latest day_obs in the input.",
         name="{diaSourceOutputName}",
-        storageClass="ArrowAstropy",
+        storageClass="DataFrame",
         dimensions=("instrument", "day_obs"),
     )
     outputVisitInfo = pipeBase.connectionTypes.Output(
         doc="Concatenated Visit Summary from all day_obs in the input. The day_obs"
         "dimension would be the day_obs of the latest day_obs in the input.",
         name="{visitInfoOutputName}",
-        storageClass="ArrowAstropy",
+        storageClass="DataFrame",
         dimensions=("instrument", "day_obs"),
     )
 
