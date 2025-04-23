@@ -1,5 +1,4 @@
 import heliolinx.heliolinx as hl
-import lsst.pex.config
 import lsst.pipe.base
 from lsst.pipe.base import connectionTypes
 import pandas as pd
@@ -8,8 +7,6 @@ from . import utils
 import astropy.units as u
 from datetime import datetime
 
-import lsst.pex.config as pexConfig
-from lsst.pipe.base import Struct, NoWorkFound
 import lsst.pipe.base.connectionTypes as connTypes
 from lsst.verify import Measurement, Datum
 from lsst.verify.tasks import AbstractMetadataMetricTask, MetricTask, MetricComputationError
@@ -17,9 +14,8 @@ from lsst.verify.tasks import AbstractMetadataMetricTask, MetricTask, MetricComp
 import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
 import lsst.pipe.base.connectionTypes as cT
-import numpy as np
 from lsst.pex.config import Config, ConfigField, ConfigurableField, Field
-from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections, Struct
+from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections, NoWorkFound
 from lsst.pipe.tasks.background import (
     FocalPlaneBackground,
     FocalPlaneBackgroundConfig,
@@ -33,18 +29,13 @@ import functools
 import logging
 import numbers
 import os
-
-import numpy as np
-import pandas as pd
 import astropy.table
 from astro_metadata_translator.headers import merge_headers
 
 import lsst.geom
-import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.daf.base as dafBase
 from lsst.daf.butler.formatters.parquet import pandas_to_astropy
-from lsst.pipe.base import NoWorkFound, connectionTypes
 import lsst.afw.table as afwTable
 from lsst.afw.image import ExposureSummaryStats, ExposureF
 from lsst.meas.base import SingleFrameMeasurementTask, DetectorVisitIdGeneratorConfig
@@ -52,6 +43,9 @@ from lsst.obs.base.utils import strip_provenance_from_fits_header
 
 from lsst.pipe.tasks.postprocess import TableVStack
 
+diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
+                             'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
+visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
 
 class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
                                dimensions=["instrument", "day_obs"]):
@@ -93,110 +87,83 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
     )
 
 
-def getImageTimeTol():
-    return 2./(24.*3600.)
-
-diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
-                             'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
-""" # Missing
-float mag
-float sigmag
-char obscode[MINSTRINGLEN]
-long known_obj
-long det_qual"""
-# ['diaSourceId', 'detector', 'band', 'diaObjectId', 'ssObjectId', 'parentDiaSourceId', 'midpointMjdTai', 'bboxSize', 'time_processed', 'ra', 'dec', 'raErr', 'decErr', 'ra_dec_Cov', 'x', 'y', 'xErr', 'yErr', 'apFlux', 'apFluxErr', 'snr', 'psfFlux', 'psfFluxErr', 'psfChi2', 'psfNdata', 'trailFlux', 'trailRa', 'trailDec', 'trailLength', 'trailAngle', 'dipoleMeanFlux', 'dipoleMeanFluxErr', 'dipoleFluxDiff', 'dipoleFluxDiffErr', 'dipoleLength', 'dipoleAngle', 'dipoleChi2', 'isDipole', 'dipoleFitAttempted', 'dipoleNdata', 'scienceFlux', 'scienceFluxErr', 'ixx', 'iyy', 'ixy', 'ixxPSF', 'iyyPSF', 'ixyPSF', 'extendedness', 'reliability', 'pixelFlags', 'pixelFlags_offimage', 'pixelFlags_edge', 'pixelFlags_interpolated', 'pixelFlags_saturated', 'pixelFlags_cr', 'pixelFlags_bad', 'pixelFlags_suspect', 'pixelFlags_interpolatedCenter', 'pixelFlags_saturatedCenter', 'pixelFlags_crCenter', 'pixelFlags_suspectCenter', 'centroid_flag', 'apFlux_flag', 'apFlux_flag_apertureTruncated', 'psfFlux_flag', 'psfFlux_flag_noGoodPixels', 'psfFlux_flag_edge', 'forced_PsfFlux_flag', 'forced_PsfFlux_flag_noGoodPixels', 'forced_PsfFlux_flag_edge', 'shape_flag', 'shape_flag_no_pixels', 'shape_flag_not_contained', 'shape_flag_parent_source', 'trail_flag_edge', 'pixelFlags_streak', 'pixelFlags_streakCenter', 'pixelFlags_injected', 'pixelFlags_injectedCenter', 'pixelFlags_injected_template', 'pixelFlags_injected_templateCenter', 'pixelFlags_nodata', 'pixelFlags_nodataCenter']
-visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
-"""   double MJD;
-  double RA;
-  double Dec;
-  char obscode[MINSTRINGLEN];
-  double X;
-  double Y;
-  double Z;
-  double VX;
-  double VY;
-  double VZ;
-  long startind;
-  long endind;
-  double exptime; // Exposure time in seconds"""
-
 class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections):
-    obscode = lsst.pex.config.Field(
+    obscode = Field(
         dtype=str,
         default="X05",
         doc="MPC code of observatory"
     )
-    mintrkpts = lsst.pex.config.Field(
+    mintrkpts = Field(
         dtype=int,
         default=2,
         doc="minimum number of sources to qualify as a tracklet"
     )
-    imagetimetol = lsst.pex.config.Field(
+    imagetimetol = Field(
         dtype=float,
-        default=getImageTimeTol(),
-        doc="Tolerance for matching image time, in days: e.g. 1 second"
+        default=1./(24.*3600.),
+        doc="Tolerance for matching image time, in days (default: 1 second)"
     )
-    maxvel = lsst.pex.config.Field(
+    maxvel = Field(
         dtype=float,
         default=1.5,
         doc="Default max angular velocity in deg/day."
     )
-    minvel = lsst.pex.config.Field(
+    minvel = Field(
         dtype=float,
         default=0,
         doc="Min angular velocity in deg/day"
     )
-    exptime = lsst.pex.config.Field(
+    exptime = Field(
         dtype=float,
         default=30,
         doc="Default exposure time (overriden by sspVisitInputs)"
     )
-    minarc = lsst.pex.config.Field(
+    minarc = Field(
         dtype=float,
         default=0,
         doc="Min total angular arc in arcseconds."
     )
-    maxtime = lsst.pex.config.Field(
+    maxtime = Field(
         dtype=float,
         default=1.5/24,
         doc="Max inter-image time interval, in days."
     )
-    mintime = lsst.pex.config.Field(
+    mintime = Field(
         dtype=float,
         default=1/86400,
         doc="Minimum inter-image time interval, in days."
     )
-    imagerad = lsst.pex.config.Field(
+    imagerad = Field(
         dtype=float,
         default=2.0,
         doc="radius from image center to most distant corner (deg)"
     )
-    maxgcr = lsst.pex.config.Field(
+    maxgcr = Field(
         dtype=float,
         default=0.5,
         doc="Default maximum Great Circle Residual allowed for a valid tracklet (arcsec)"
     )
-    siglenscale = lsst.pex.config.Field(
+    siglenscale = Field(
         dtype=float,
         default=0.5,
         doc="Default scaling from trail length to trail length uncertainty"
     )
-    sigpascale = lsst.pex.config.Field(
+    sigpascale = Field(
         dtype=float,
         default=1.0,
         doc="Default scaling from trail length to trail angle uncertainty"
     )
-    max_netl = lsst.pex.config.Field(
+    max_netl = Field(
         dtype=int,
         default=2,
         doc="Maximum non-exclusive tracklet length"
     )
-    verbose = lsst.pex.config.Field(
+    verbose = Field(
         dtype=int,
         default=0,
         doc="Prints monitoring output."
     )
-    time_offset = lsst.pex.config.Field(
+    time_offset = Field(
         dtype=float,
         default=0,
         doc="Offset in seconds to change timescale (TAI to UTC, for example)"
@@ -216,7 +183,7 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         config = hl.MakeTrackletsConfig()
         configs_to_transfer = ['mintrkpts', 'imagetimetol', 'maxvel', 'minvel', 'exptime', 'minarc',
                                'maxtime', 'mintime', 'imagerad', 'maxgcr', 'siglenscale', 'sigpascale',
-                               'max_netl', 'verbose'] # should this have time_offset?
+                               'max_netl', 'verbose']  # should this have time_offset?
         for config_name in configs_to_transfer:
             setattr(config, config_name, getattr(self.config, config_name))
 
@@ -229,6 +196,12 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         sspVisitInputs = sspVisitInputs[['MJD', 'RA', 'Dec', 'exptime']]
         sspVisitInputs['obscode'] = self.config.obscode
         # convert dataframes to numpy array with dtypes that heliolinc expects
+        print(list(sspDiaSourceInputs.columns))
+        # hldet_array = sspDiaSourceInputs.to_numpy()
+        # hlimage_array = sspVisitInputs.to_numpy()
+        # hldet = np.array(list(zip(hldet_array)), dtype=[("hldet", hldet_array.dtype)])
+        # hlimage = np.array(list(zip(hlimage_array)), dtype=[("hlimage", hlimage_array.dtype)])
+        # (dets, tracklets, trac2det) = hl.makeTracklets(config, hldet, hlimage)
         (dets, tracklets, trac2det) = hl.makeTracklets(config,
                                                        utils.make_hldet(sspDiaSourceInputs),
                                                        utils.make_hlimage(sspVisitInputs),
