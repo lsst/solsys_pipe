@@ -31,11 +31,15 @@ __all__ = [
 ]
 
 
+import logging
+
 import lsst.pipe.base as pipeBase
 from astropy import units as u
 from astropy.table import Table
 from lsst.daf.base import DateTime
 from lsst.pipe.tasks.postprocess import TableVStack
+
+_LOG = logging.getLogger(__name__)
 
 
 class ConsolidateSspTablesConnections(
@@ -85,6 +89,11 @@ class ConsolidateSspTablesConnections(
         """
         # Get all the data_ids to be iterated over.
         to_do = set(adjuster.iter_data_ids())
+
+        # If the iterable is empty, we have nothing to do.
+        if not to_do:
+            _LOG.warning("No data IDs to adjust quanta for.")
+            return
 
         # Dynamically get data_id for the latest day_obs.
         data_id_latest = max(to_do, key=lambda d: d["day_obs"])
