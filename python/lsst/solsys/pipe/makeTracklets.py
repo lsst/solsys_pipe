@@ -96,8 +96,36 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
 def getImageTimeTol():
     return 2./(24.*3600.)
 
+diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
+                             'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
+""" # Missing
+float mag
+float sigmag
+char obscode[MINSTRINGLEN]
+long known_obj
+long det_qual"""
+# ['diaSourceId', 'detector', 'band', 'diaObjectId', 'ssObjectId', 'parentDiaSourceId', 'midpointMjdTai', 'bboxSize', 'time_processed', 'ra', 'dec', 'raErr', 'decErr', 'ra_dec_Cov', 'x', 'y', 'xErr', 'yErr', 'apFlux', 'apFluxErr', 'snr', 'psfFlux', 'psfFluxErr', 'psfChi2', 'psfNdata', 'trailFlux', 'trailRa', 'trailDec', 'trailLength', 'trailAngle', 'dipoleMeanFlux', 'dipoleMeanFluxErr', 'dipoleFluxDiff', 'dipoleFluxDiffErr', 'dipoleLength', 'dipoleAngle', 'dipoleChi2', 'isDipole', 'dipoleFitAttempted', 'dipoleNdata', 'scienceFlux', 'scienceFluxErr', 'ixx', 'iyy', 'ixy', 'ixxPSF', 'iyyPSF', 'ixyPSF', 'extendedness', 'reliability', 'pixelFlags', 'pixelFlags_offimage', 'pixelFlags_edge', 'pixelFlags_interpolated', 'pixelFlags_saturated', 'pixelFlags_cr', 'pixelFlags_bad', 'pixelFlags_suspect', 'pixelFlags_interpolatedCenter', 'pixelFlags_saturatedCenter', 'pixelFlags_crCenter', 'pixelFlags_suspectCenter', 'centroid_flag', 'apFlux_flag', 'apFlux_flag_apertureTruncated', 'psfFlux_flag', 'psfFlux_flag_noGoodPixels', 'psfFlux_flag_edge', 'forced_PsfFlux_flag', 'forced_PsfFlux_flag_noGoodPixels', 'forced_PsfFlux_flag_edge', 'shape_flag', 'shape_flag_no_pixels', 'shape_flag_not_contained', 'shape_flag_parent_source', 'trail_flag_edge', 'pixelFlags_streak', 'pixelFlags_streakCenter', 'pixelFlags_injected', 'pixelFlags_injectedCenter', 'pixelFlags_injected_template', 'pixelFlags_injected_templateCenter', 'pixelFlags_nodata', 'pixelFlags_nodataCenter']
+visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
+"""   double MJD;
+  double RA;
+  double Dec;
+  char obscode[MINSTRINGLEN];
+  double X;
+  double Y;
+  double Z;
+  double VX;
+  double VY;
+  double VZ;
+  long startind;
+  long endind;
+  double exptime; // Exposure time in seconds"""
 
 class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections):
+    obscode = lsst.pex.config.Field(
+        dtype=str,
+        default="X05",
+        doc="MPC code of observatory"
+    )
     mintrkpts = lsst.pex.config.Field(
         dtype=int,
         default=2,
@@ -186,14 +214,24 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         # copy all config parameters from the Task's config object
         # to heliolinc's native config object.
         config = hl.MakeTrackletsConfig()
-        allvars = [item for item in dir(hl.MakeTrackletsConfig) if not item.startswith("__")]
-        for var in allvars:
-            setattr(config, var, getattr(self.config, var))
+        configs_to_transfer = ['mintrkpts', 'imagetimetol', 'maxvel', 'minvel', 'exptime', 'minarc',
+                               'maxtime', 'mintime', 'imagerad', 'maxgcr', 'siglenscale', 'sigpascale',
+                               'max_netl', 'verbose'] # should this have time_offset?
+        for config_name in configs_to_transfer:
+            setattr(config, config_name, getattr(self.config, config_name))
 
+        sspDiaSourceInputs = sspDiaSourceInputs.rename(columns = diaSourceColumnRenameDict)
+        sspDiaSourceInputs = sspDiaSourceInputs[['MJD', 'RA', 'Dec', 'idstring']]
+        sspDiaSourceInputs['idstring'] = sspDiaSourceInputs['idstring'].astype(str)
+        sspDiaSourceInputs['obscode'] = self.config.obscode
+
+        sspVisitInputs = sspVisitInputs.rename(columns = visitSummaryColumnRenameDict)
+        sspVisitInputs = sspVisitInputs[['MJD', 'RA', 'Dec', 'exptime']]
+        sspVisitInputs['obscode'] = self.config.obscode
         # convert dataframes to numpy array with dtypes that heliolinc expects
         (dets, tracklets, trac2det) = hl.makeTracklets(config,
-                                                       utils.df2numpy(sspDiaSourceInputs, "hldet"),
-                                                       utils.df2numpy(sspVisitInputs,     "hlimage"),
+                                                       utils.make_hldet(sspDiaSourceInputs),
+                                                       utils.make_hlimage(sspVisitInputs),
                                                       )
 
         # Do something about trailed sources
