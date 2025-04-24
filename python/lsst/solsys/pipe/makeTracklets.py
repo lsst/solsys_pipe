@@ -93,6 +93,29 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
         name="ssp_visit_heliolinc_inputs",
     )
 
+diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
+                             'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
+""" # Missing
+float mag
+float sigmag
+char obscode[MINSTRINGLEN]
+long known_obj
+long det_qual"""
+# ['diaSourceId', 'detector', 'band', 'diaObjectId', 'ssObjectId', 'parentDiaSourceId', 'midpointMjdTai', 'bboxSize', 'time_processed', 'ra', 'dec', 'raErr', 'decErr', 'ra_dec_Cov', 'x', 'y', 'xErr', 'yErr', 'apFlux', 'apFluxErr', 'snr', 'psfFlux', 'psfFluxErr', 'psfChi2', 'psfNdata', 'trailFlux', 'trailRa', 'trailDec', 'trailLength', 'trailAngle', 'dipoleMeanFlux', 'dipoleMeanFluxErr', 'dipoleFluxDiff', 'dipoleFluxDiffErr', 'dipoleLength', 'dipoleAngle', 'dipoleChi2', 'isDipole', 'dipoleFitAttempted', 'dipoleNdata', 'scienceFlux', 'scienceFluxErr', 'ixx', 'iyy', 'ixy', 'ixxPSF', 'iyyPSF', 'ixyPSF', 'extendedness', 'reliability', 'pixelFlags', 'pixelFlags_offimage', 'pixelFlags_edge', 'pixelFlags_interpolated', 'pixelFlags_saturated', 'pixelFlags_cr', 'pixelFlags_bad', 'pixelFlags_suspect', 'pixelFlags_interpolatedCenter', 'pixelFlags_saturatedCenter', 'pixelFlags_crCenter', 'pixelFlags_suspectCenter', 'centroid_flag', 'apFlux_flag', 'apFlux_flag_apertureTruncated', 'psfFlux_flag', 'psfFlux_flag_noGoodPixels', 'psfFlux_flag_edge', 'forced_PsfFlux_flag', 'forced_PsfFlux_flag_noGoodPixels', 'forced_PsfFlux_flag_edge', 'shape_flag', 'shape_flag_no_pixels', 'shape_flag_not_contained', 'shape_flag_parent_source', 'trail_flag_edge', 'pixelFlags_streak', 'pixelFlags_streakCenter', 'pixelFlags_injected', 'pixelFlags_injectedCenter', 'pixelFlags_injected_template', 'pixelFlags_injected_templateCenter', 'pixelFlags_nodata', 'pixelFlags_nodataCenter']
+visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
+"""   double MJD;
+  double RA;
+  double Dec;
+  char obscode[MINSTRINGLEN];
+  double X;
+  double Y;
+  double Z;
+  double VX;
+  double VY;
+  double VZ;
+  long startind;
+  long endind;
+  double exptime; // Exposure time in seconds"""
 
 class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections):
     obscode = Field(
