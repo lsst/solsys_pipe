@@ -117,8 +117,8 @@ class ConsolidateSspTablesConnections(
             adjuster.remove_quantum(data_id)
 
         # Log that the last day_obs is being kept as a reference.
-        _LOG.info(f"Combined inputs from {len(to_do)} quanta under the latest "
-                  f"day_obs ({data_id_latest['day_obs']}) as reference.")
+        _LOG.info(f"Combined inputs from {len(to_do)} quanta into one quantum "
+                  f"under reference day_obs {data_id_latest['day_obs']}.")
 
 
 class ConsolidateSspTablesConfig(
