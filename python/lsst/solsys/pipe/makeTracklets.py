@@ -61,35 +61,35 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
         storageClass="DataFrame",
         name="dia_source_dayobs"
     )
-    sspVisitInputs = connectionTypes.PrerequisiteInput(
+    sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument", "day_obs"],
         storageClass="DataFrame",
-        name="sspVisitInputs"
+        name="visit_summary_dayobs"
     )
     sspTrackletSources = connectionTypes.Output(
         doc="sources that got included in tracklets",
         dimensions=["instrument", "day_obs"],
         storageClass="ArrowAstropy",
-        name="sspTrackletSources"
+        name="ssp_tracklet_sources"
     )
     sspTracklets = connectionTypes.Output(
         doc="summary data for tracklets",
         dimensions=["instrument", "day_obs"],
         storageClass="ArrowAstropy",
-        name="sspTracklets"
+        name="ssp_tracklets"
     )
     sspTrackletToSource = connectionTypes.Output(
         doc="indices connecting tracklets to sspTrackletSources",
         dimensions=["instrument", "day_obs"],
         storageClass="ArrowAstropy",
-        name="sspTrackletToSource"
+        name="ssp_tracklet_to_source"
     )
     sspVisitHeliolincInputs = connectionTypes.Output(
         doc="visit stats plus observer coordinates formatted for heliolinc",
         dimensions=["instrument", "day_obs"],
         storageClass="ArrowAstropy",
-        name="sspVisitHeliolincInputs",
+        name="ssp_visit_heliolinc_inputs",
     )
 
 
