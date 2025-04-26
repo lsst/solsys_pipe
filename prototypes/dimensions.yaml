@@ -101,14 +101,30 @@ elements:
       nested:
         cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
-  sspHypothesisBundle:
+  ssp_hypothesis_table:
     doc: >
-      A hypothesis for the Solar System linking pipeline
+      A partitioned set of hypothesized r, r', r'' over which HelioLinC
+      searches in parallel for new SSOs.
+    keys:
+      - name: name
+        type: string
+        length: 64
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
+  ssp_hypothesis_bundle:
+    doc: >
+      A subset of hypothesized r, r', r'' over which a single quanta of
+      HelioLinC searches for new SSOs.
     keys:
       - name: id
         type: int
+        length: 64
+    requires: 
+      - ssp_hypothesis_table
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
+
 
   detector:
     doc: >

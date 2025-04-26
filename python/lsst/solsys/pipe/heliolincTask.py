@@ -17,53 +17,54 @@ from . import utils
 #
 
 class LinkConnections(lsst.pipe.base.PipelineTaskConnections,
-                           dimensions=("instrument", "sspHypothesisBundle")):
+                           dimensions=("instrument", "day_obs",
+                                       "ssp_hypothesis_table", "ssp_hypothesis_bundle")):
     sspVisitInputs = connectionTypes.PrerequisiteInput(
         doc="visit stats plus observer coordinates",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
         name="sspVisitInputs"
     )
     sspTrackletSources = connectionTypes.Input(
         doc="sources that got included in tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
         name="sspTrackletSources"
     )
     sspTracklets = connectionTypes.Input(
         doc="summary data for tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
         name="sspTracklets"
     )
     sspTrackletToSource = connectionTypes.Input(
         doc="indices connecting tracklets to sspTrackletSources",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
         name="sspTrackletToSource"
     )
     sspHypothesisTable = connectionTypes.PrerequisiteInput(
-        doc="hypotheses about asteroids' heliocentric radial motion",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        doc="hypotheses of asteroids' heliocentric radial motion",
+        dimensions=["ssp_hypothesis_table"],
+        storageClass="ArrowAstropy",
         name = "sspHypothesisTable",
     )
     sspEarthState = connectionTypes.PrerequisiteInput(
         doc="Heliocentric Cartesian position and velocity for Earth",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=[],
+        storageClass="ArrowAstropy",
         name = "sspEarthState",
     )
     sspLinkage = connectionTypes.Output(
         doc="one line summary of each linkage",
         dimensions=("instrument", "sspHypothesisBundle"),
-        storageClass="DataFrame",
-        name = "sspLinkage",
+        storageClass="ArrowAstropy",
+        name = "sspLinkages",
     )
     sspLinkageSources = connectionTypes.Output(
         doc="indices connecting linkages (clusters) to trackletSources",
         dimensions=("instrument", "sspHypothesisBundle"),
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         name = "sspLinkageSources",
     )
 
@@ -153,8 +154,8 @@ class LinkTask(lsst.pipe.base.PipelineTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-        hypothesis_id = butlerQC.quantum.dataId.sspHypothesisBundle.id
-        outputs = self.run(**inputs, sspHypothesisBundle=hypothesis_id)
+        bundle_id = butlerQC.quantum.dataId.sspHypothesisBundle.id
+        outputs = self.run(**inputs, sspHypothesisBundle=bundle_id)
         butlerQC.put(outputs, outputRefs)
 
     def run(self, sspVisitInputs, sspTrackletSources, sspTracklets, sspTrackletToSource, sspHypothesisTable, sspEarthState, sspHypothesisBundle):
@@ -164,6 +165,8 @@ class LinkTask(lsst.pipe.base.PipelineTask):
 
         # copy all config parameters from the Task's config object
         # to heliolinx's native config object.
+        # Mask hypothesisTable to bundle_id == bundle_id
+
         config = hl.HeliolincConfig()
         allvars = [item for item in dir(hl.HeliolincConfig) if not item.startswith("__")]
         for var in allvars:

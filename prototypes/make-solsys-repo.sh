@@ -53,8 +53,8 @@ butler register-dataset-type "$REPO" sspTrackletSources  ArrowAstropy instrument
 butler register-dataset-type "$REPO" sspTrackletToSource ArrowAstropy instrument
 butler register-dataset-type "$REPO" sspTracklets        ArrowAstropy instrument
 butler register-dataset-type "$REPO" sspVisitInputs      ArrowAstropy instrument
-butler register-dataset-type "$REPO" sspHypothesisTable  ArrowAstropy instrument
 butler register-dataset-type "$REPO" sspEarthState       ArrowAstropy instrument
+butler register-dataset-type "$REPO" sspHypothesisTable  ArrowAstropy sspHypothesisTable
 butler register-dataset-type "$REPO" sspLinkage          ArrowAstropy instrument sspHypothesisBundle
 butler register-dataset-type "$REPO" sspLinkageSources   ArrowAstropy instrument sspHypothesisBundle
 
