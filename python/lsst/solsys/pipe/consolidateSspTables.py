@@ -116,6 +116,10 @@ class ConsolidateSspTablesConnections(
                 adjuster.add_input(data_id_latest, "inputVisitSummaries", data_id_visit_summary)
             adjuster.remove_quantum(data_id)
 
+        # Log that the last day_obs is being kept as a reference.
+        _LOG.info(f"Combined inputs from {len(to_do)} quanta into one quantum "
+                  f"under reference day_obs {data_id_latest['day_obs']}.")
+
 
 class ConsolidateSspTablesConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateSspTablesConnections
@@ -141,14 +145,25 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
         # Sort by visit only since no detector key in visitSummary dataId.
         inputVisitSummaryRefs.sort(key=lambda x: x.dataId["visit"])
 
-        assert len(inputDiaTableRefs) == len(inputVisitSummaryRefs), (
-            f"Number of inputDiaTableRefs ({len(inputDiaTableRefs)}) does not match number of "
-            f"inputVisitSummaryRefs ({len(inputVisitSummaryRefs)}). This is unexpected."
+        # Visits in the visit summaries and unique visits in the DIA tables
+        # should be the same.
+        visitsInDia = set(ref.dataId["visit"] for ref in inputDiaTableRefs)
+        visitsInSummary = set(ref.dataId["visit"] for ref in inputVisitSummaryRefs)
+
+        # Some sanity checks.
+        assert len(visitsInSummary) == len(inputVisitSummaryRefs), "Duplicate visits in visit summaries."
+        assert visitsInDia == visitsInSummary, (
+            f"Mismatch in visits: {len(visitsInSummary)} visits in visit summaries, "
+            f"{len(visitsInDia)} unique visits in DIA tables."
         )
+
         self.log.info(
-            f"Concatenating {len(inputDiaTableRefs)} per-dayobs Source Tables "
-            f"and {len(inputVisitSummaryRefs)} per-dayobs Visit Summaries"
+            f"Concatenating {len(inputVisitSummaryRefs)} visit summaries and {len(inputDiaTableRefs)} "
+            f"DIA source tables over {len(visitsInDia)} visits.",
         )
+
+        # Concatenate the input DIA tables into a single table without having
+        # them all in memory at once.
         consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs)
 
         # A list of dictionaries for each visit.
