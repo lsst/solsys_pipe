@@ -5,8 +5,8 @@ tasks:
   consolidateSsp:
     class: lsst.solsys.pipe.consolidateSspTables.ConsolidateSspTablesTask
     config:
-      connections.diaSourceInputName: "dia_source_detector"
-      connections.visitSummaryInputName: "visit_summary"
+      connections.diaSourceInputName: dia_source_detector
+      connections.visitSummaryInputName: visit_summary
   makeTracklets: lsst.solsys.pipe.makeTracklets.MakeTrackletsTask
   #  heliolinc: lsst.solsys.pipe.heliolinc.HeliolincTask
   #  linkPurify: lsst.solsys.pipe.linkPurify.LinkPurifyTask

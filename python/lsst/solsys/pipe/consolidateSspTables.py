@@ -45,10 +45,10 @@ _LOG = logging.getLogger(__name__)
 class ConsolidateSspTablesConnections(
     pipeBase.PipelineTaskConnections,
     defaultTemplates={
-        "diaSourceInputName": "goodSeeingDiff_diaSrcTable",
-        "diaSourceOutputName": "dia_source_dayobs",
-        "visitSummaryInputName": "finalVisitSummary",
-        "visitInfoOutputName": "visit_summary_dayobs",
+        "diaSourceInputName": "dia_source_detector",
+        "diaSourceOutputName": "dia_source_dayobs_14",
+        "visitSummaryInputName": "visit_summary",
+        "visitInfoOutputName": "visit_summary_dayobs_14",
     },
     dimensions=("instrument", "day_obs"),
 ):

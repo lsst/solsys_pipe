@@ -43,6 +43,7 @@ from lsst.obs.base.utils import strip_provenance_from_fits_header
 
 from lsst.pipe.tasks.postprocess import TableVStack
 
+_LOG = logging.getLogger(__name__)
 diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
                              'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
 visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
@@ -53,13 +54,13 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
         doc="Table of unattributed sources",
         dimensions=["instrument", "day_obs"],
         storageClass="DataFrame",
-        name="dia_source_dayobs"
+        name="dia_source_dayobs_14"
     )
     sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument", "day_obs"],
         storageClass="DataFrame",
-        name="visit_summary_dayobs"
+        name="visit_summary_dayobs_14"
     )
     sspTrackletSources = connectionTypes.Output(
         doc="sources that got included in tracklets",
@@ -116,7 +117,7 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
     exptime = Field(
         dtype=float,
         default=30,
-        doc="Default exposure time (overriden by sspVisitInputs)"
+        doc="Default exposure time in seconds (overriden by sspVisitInputs)"
     )
     minarc = Field(
         dtype=float,
@@ -196,17 +197,11 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         sspVisitInputs = sspVisitInputs[['MJD', 'RA', 'Dec', 'exptime']]
         sspVisitInputs['obscode'] = self.config.obscode
         # convert dataframes to numpy array with dtypes that heliolinc expects
-        print(list(sspDiaSourceInputs.columns))
-        # hldet_array = sspDiaSourceInputs.to_numpy()
-        # hlimage_array = sspVisitInputs.to_numpy()
-        # hldet = np.array(list(zip(hldet_array)), dtype=[("hldet", hldet_array.dtype)])
-        # hlimage = np.array(list(zip(hlimage_array)), dtype=[("hlimage", hlimage_array.dtype)])
-        # (dets, tracklets, trac2det) = hl.makeTracklets(config, hldet, hlimage)
         (dets, tracklets, trac2det) = hl.makeTracklets(config,
                                                        utils.make_hldet(sspDiaSourceInputs),
                                                        utils.make_hlimage(sspVisitInputs),
                                                       )
-
+        _LOG.info(f'makeTracklets finished: {len(dets)} detections, {len(tracklets)} tracklets')
         # Do something about trailed sources
         return lsst.pipe.base.Struct(sspTrackletSources=dets,
                                      sspTracklets=tracklets,
