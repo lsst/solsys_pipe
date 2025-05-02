@@ -31,13 +31,17 @@ __all__ = [
 ]
 
 
+from heliolinx import solarsyst_dyn_geo as solardg
 import logging
+import numpy as np
 
 import lsst.pipe.base as pipeBase
 from astropy import units as u
 from astropy.table import Table
 from lsst.daf.base import DateTime
+import lsst.pex.config
 from lsst.pipe.tasks.postprocess import TableVStack
+from lsst.solsys.pipe.utils import df2numpy
 
 _LOG = logging.getLogger(__name__)
 
@@ -52,6 +56,12 @@ class ConsolidateSspTablesConnections(
     },
     dimensions=("instrument", "day_obs"),
 ):
+    sspEarthState = pipeBase.connectionTypes.PrerequisiteInput(
+        doc="Heliocentric Cartesian position and velocity for Earth",
+        dimensions=[],
+        storageClass="ArrowAstropy",
+        name = "sspEarthState",
+    )
     inputDiaTables = pipeBase.connectionTypes.Input(
         doc="Input Source Tables to be concatenated",
         name="{diaSourceInputName}",
@@ -124,7 +134,26 @@ class ConsolidateSspTablesConnections(
 class ConsolidateSspTablesConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateSspTablesConnections
 ):
-    pass
+    observatoryCode = lsst.pex.config.Field(
+        dtype=str,
+        default='X05',
+        doc="Observatory code MPC, defaults to X05"
+    )
+    observatoryLongitude = lsst.pex.config.Field(
+        dtype=float,
+        default=289.25058,
+        doc="Observatory longitude from the MPC, defaults to X05"
+    )
+    observatoryParallaxCosine = lsst.pex.config.Field(
+        dtype=float,
+        default=0.864981,
+        doc="Observatory parallax cosine from the MPC, defaults to X05"
+    )
+    observatoryParallaxSine = lsst.pex.config.Field(
+        dtype=float,
+        default=-0.500958,
+        doc="Observatory parallax sine from the MPC, defaults to X05"
+    )
 
 
 class ConsolidateSspTablesTask(pipeBase.PipelineTask):
@@ -195,6 +224,16 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
 
         # Make an Astropy table of visitInfo entries.
         consolidatedVisitInfo = Table(rows=ccdEntries)
+        consolidatedVisitInfo['obsCode'] = self.config.observatoryCode
+        image = consolidatedVisitInfo[['MJD', 'boresightRa', 'boresightDec', 'obsCode']].to_pandas().values
+        obsarr = (self.config.observatoryLongitude, self.config.observatoryParallaxCosine,
+                  self.config.observatoryParallaxSine)
+
+        earthpos = df2numpy(inputs["sspEarthState"].to_pandas().rename(columns={'X': 'x', 'Y': 'y', 'Z': 'z', 'VX': 'vx', 'VY': 'vy', 'VZ': 'vz'}), 'EarthState')
+        result = np.array(solardg.image_add_observerpos(image, obsarr, earthpos))
+
+        for col in ['X', 'Y', 'Z', 'VX', 'VY', 'VZ']:
+            consolidatedVisitInfo['observer' + col] = result[col]
 
         # Assign units to relevant columns.
         consolidatedVisitInfo["exposureTime"].unit = u.second

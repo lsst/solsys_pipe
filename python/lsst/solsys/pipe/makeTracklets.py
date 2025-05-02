@@ -86,6 +86,8 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
         storageClass="ArrowAstropy",
         name="ssp_visit_heliolinc_inputs",
     )
+
+
 diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
                              'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
 visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
