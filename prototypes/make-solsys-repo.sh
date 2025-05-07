@@ -45,8 +45,8 @@ butler register-instrument "$REPO" 'lsst.obs.lsst.LsstComCam'
 butler register-instrument "$REPO" 'lsst.obs.subaru.HyperSuprimeCam'
 
 # regular datasets
-butler register-dataset-type "$REPO" dia_source_visit    ArrowAstropy instrument visit
-
+butler register-dataset-type "$REPO" dia_source_detector DataFrame band instrument day_obs detector physical_filter visit
+butler register-dataset-type "$REPO" visit_summary ExposureCatalog band instrument day_obs physical_filter visit
 # SSP datasets
 butler register-dataset-type "$REPO" sspDiaSourceInputs  ArrowAstropy instrument
 butler register-dataset-type "$REPO" sspTrackletSources  ArrowAstropy instrument

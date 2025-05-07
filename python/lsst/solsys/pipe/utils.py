@@ -17,9 +17,9 @@ def df_to_numpy(df, dtype):
     return sa
 
 
-def det_to_numpy(df):
+def make_hldet(df):
     return df_to_numpy(df, dtype=solardg.hldet)
 
 
-def vis_to_numpy(df):
+def make_hlimage(df):
     return df_to_numpy(df, dtype=solardg.hlimage)

@@ -1,129 +1,173 @@
 import heliolinx.heliolinx as hl
-import lsst.pex.config
 import lsst.pipe.base
 from lsst.pipe.base import connectionTypes
 import pandas as pd
 import numpy as np
 from . import utils
+import astropy.units as u
+from datetime import datetime
+
+import lsst.pipe.base.connectionTypes as connTypes
+from lsst.verify import Measurement, Datum
+from lsst.verify.tasks import AbstractMetadataMetricTask, MetricTask, MetricComputationError
+
+import lsst.afw.image as afwImage
+import lsst.afw.math as afwMath
+import lsst.pipe.base.connectionTypes as cT
+from lsst.pex.config import Config, ConfigField, ConfigurableField, Field
+from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections, NoWorkFound
+from lsst.pipe.tasks.background import (
+    FocalPlaneBackground,
+    FocalPlaneBackgroundConfig,
+    MaskObjectsTask,
+    SkyMeasurementTask,
+)
+
+from collections import defaultdict
+import dataclasses
+import functools
+import logging
+import numbers
+import os
+import astropy.table
+from astro_metadata_translator.headers import merge_headers
+
+import lsst.geom
+import lsst.pipe.base as pipeBase
+import lsst.daf.base as dafBase
+from lsst.daf.butler.formatters.parquet import pandas_to_astropy
+import lsst.afw.table as afwTable
+from lsst.afw.image import ExposureSummaryStats, ExposureF
+from lsst.meas.base import SingleFrameMeasurementTask, DetectorVisitIdGeneratorConfig
+from lsst.obs.base.utils import strip_provenance_from_fits_header
+
+from lsst.pipe.tasks.postprocess import TableVStack
+
+_LOG = logging.getLogger(__name__)
+diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
+                             'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
+visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
 
 class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
-                               dimensions=["instrument"]):
+                               dimensions=["instrument", "day_obs"]):
     sspDiaSourceInputs = connectionTypes.Input(
         doc="Table of unattributed sources",
-        dimensions=["instrument"],
+        dimensions=["instrument", "day_obs"],
         storageClass="DataFrame",
-        name="sspDiaSourceInputs"
+        name="dia_source_dayobs_14"
     )
-    sspVisitInputs = connectionTypes.PrerequisiteInput(
+    sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
-        dimensions=["instrument"],
+        dimensions=["instrument", "day_obs"],
         storageClass="DataFrame",
-        name="sspVisitInputs"
+        name="visit_summary_dayobs_14"
     )
     sspTrackletSources = connectionTypes.Output(
         doc="sources that got included in tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
-        name="sspTrackletSources"
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="ssp_tracklet_sources"
     )
     sspTracklets = connectionTypes.Output(
         doc="summary data for tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
-        name="sspTracklets"
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="ssp_tracklets"
     )
     sspTrackletToSource = connectionTypes.Output(
         doc="indices connecting tracklets to sspTrackletSources",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
-        name="sspTrackletToSource"
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="ssp_tracklet_to_source"
+    )
+    sspVisitHeliolincInputs = connectionTypes.Output(
+        doc="visit stats plus observer coordinates formatted for heliolinc",
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="ssp_visit_heliolinc_inputs",
     )
 
 
-def getImageTimeTol():
-    return 2./(24.*3600.)
-
-
 class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections):
-    mintrkpts = lsst.pex.config.Field(
+    obscode = Field(
+        dtype=str,
+        default="X05",
+        doc="MPC code of observatory"
+    )
+    mintrkpts = Field(
         dtype=int,
         default=2,
         doc="minimum number of sources to qualify as a tracklet"
     )
-    imagetimetol = lsst.pex.config.Field(
+    imagetimetol = Field(
         dtype=float,
-        default=getImageTimeTol(),
-        doc="Tolerance for matching image time, in days: e.g. 1 second"
+        default=1./(24.*3600.),
+        doc="Tolerance for matching image time, in days (default: 1 second)"
     )
-    maxvel = lsst.pex.config.Field(
+    maxvel = Field(
         dtype=float,
         default=1.5,
         doc="Default max angular velocity in deg/day."
     )
-    minvel = lsst.pex.config.Field(
+    minvel = Field(
         dtype=float,
         default=0,
         doc="Min angular velocity in deg/day"
     )
-    exptime = lsst.pex.config.Field(
+    exptime = Field(
         dtype=float,
         default=30,
-        doc="FIXME WITH GOOD DOCUMENTATION. Exposure time"
+        doc="Default exposure time in seconds (overriden by sspVisitInputs)"
     )
-    minarc = lsst.pex.config.Field(
+    minarc = Field(
         dtype=float,
         default=0,
         doc="Min total angular arc in arcseconds."
     )
-    maxtime = lsst.pex.config.Field(
+    maxtime = Field(
         dtype=float,
         default=1.5/24,
         doc="Max inter-image time interval, in days."
     )
-    mintime = lsst.pex.config.Field(
+    mintime = Field(
         dtype=float,
         default=1/86400,
         doc="Minimum inter-image time interval, in days."
     )
-    imagerad = lsst.pex.config.Field(
+    imagerad = Field(
         dtype=float,
         default=2.0,
         doc="radius from image center to most distant corner (deg)"
     )
-    maxgcr = lsst.pex.config.Field(
+    maxgcr = Field(
         dtype=float,
         default=0.5,
         doc="Default maximum Great Circle Residual allowed for a valid tracklet (arcsec)"
     )
-    timespan = lsst.pex.config.Field(
-        dtype=float,
-        default=14.0,
-        doc="Default time to look back before most recent data (days)"
-    )
-    siglenscale = lsst.pex.config.Field(
+    siglenscale = Field(
         dtype=float,
         default=0.5,
-        doc="????"
+        doc="Default scaling from trail length to trail length uncertainty"
     )
-    sigpascale = lsst.pex.config.Field(
+    sigpascale = Field(
         dtype=float,
         default=1.0,
-        doc="????"
+        doc="Default scaling from trail length to trail angle uncertainty"
     )
-    max_netl = lsst.pex.config.Field(
+    max_netl = Field(
         dtype=int,
         default=2,
         doc="Maximum non-exclusive tracklet length"
     )
-    forcerun = lsst.pex.config.Field(
-        dtype=int,
-        default=0,
-        doc="Pushes through all but the immediately fatal errors."
-    )
-    verbose = lsst.pex.config.Field(
+    verbose = Field(
         dtype=int,
         default=0,
         doc="Prints monitoring output."
+    )
+    time_offset = Field(
+        dtype=float,
+        default=0,
+        doc="Offset in seconds to change timescale (TAI to UTC, for example)"
     )
 
 class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
@@ -138,16 +182,26 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         # copy all config parameters from the Task's config object
         # to heliolinc's native config object.
         config = hl.MakeTrackletsConfig()
-        allvars = [item for item in dir(hl.MakeTrackletsConfig) if not item.startswith("__")]
-        for var in allvars:
-            setattr(config, var, getattr(self.config, var))
+        configs_to_transfer = ['mintrkpts', 'imagetimetol', 'maxvel', 'minvel', 'exptime', 'minarc',
+                               'maxtime', 'mintime', 'imagerad', 'maxgcr', 'siglenscale', 'sigpascale',
+                               'max_netl', 'verbose']  # should this have time_offset?
+        for config_name in configs_to_transfer:
+            setattr(config, config_name, getattr(self.config, config_name))
 
+        sspDiaSourceInputs = sspDiaSourceInputs.rename(columns = diaSourceColumnRenameDict)
+        sspDiaSourceInputs = sspDiaSourceInputs[['MJD', 'RA', 'Dec', 'idstring']]
+        sspDiaSourceInputs['idstring'] = sspDiaSourceInputs['idstring'].astype(str)
+        sspDiaSourceInputs['obscode'] = self.config.obscode
+
+        sspVisitInputs = sspVisitInputs.rename(columns = visitSummaryColumnRenameDict)
+        sspVisitInputs = sspVisitInputs[['MJD', 'RA', 'Dec', 'exptime']]
+        sspVisitInputs['obscode'] = self.config.obscode
         # convert dataframes to numpy array with dtypes that heliolinc expects
         (dets, tracklets, trac2det) = hl.makeTracklets(config,
-                                                       utils.df2numpy(sspDiaSourceInputs, "hldet"),
-                                                       utils.df2numpy(sspVisitInputs,     "hlimage"),
+                                                       utils.make_hldet(sspDiaSourceInputs),
+                                                       utils.make_hlimage(sspVisitInputs),
                                                       )
-
+        _LOG.info(f'makeTracklets finished: {len(dets)} detections, {len(tracklets)} tracklets')
         # Do something about trailed sources
         return lsst.pipe.base.Struct(sspTrackletSources=dets,
                                      sspTracklets=tracklets,

@@ -45,10 +45,10 @@ _LOG = logging.getLogger(__name__)
 class ConsolidateSspTablesConnections(
     pipeBase.PipelineTaskConnections,
     defaultTemplates={
-        "diaSourceInputName": "goodSeeingDiff_diaSrcTable",
-        "diaSourceOutputName": "diaSourceRolling",
-        "visitSummaryInputName": "finalVisitSummary",
-        "visitInfoOutputName": "visitInfoRolling",
+        "diaSourceInputName": "dia_source_detector",
+        "diaSourceOutputName": "dia_source_dayobs_14",
+        "visitSummaryInputName": "visit_summary",
+        "visitInfoOutputName": "visit_summary_dayobs_14",
     },
     dimensions=("instrument", "day_obs"),
 ):
@@ -72,14 +72,14 @@ class ConsolidateSspTablesConnections(
         doc="Concatenated Source Table from all day_obs in the input. The day_obs"
         "dimension would be the day_obs of the latest day_obs in the input.",
         name="{diaSourceOutputName}",
-        storageClass="ArrowAstropy",
+        storageClass="DataFrame",
         dimensions=("instrument", "day_obs"),
     )
     outputVisitInfo = pipeBase.connectionTypes.Output(
         doc="Concatenated Visit Summary from all day_obs in the input. The day_obs"
         "dimension would be the day_obs of the latest day_obs in the input.",
         name="{visitInfoOutputName}",
-        storageClass="ArrowAstropy",
+        storageClass="DataFrame",
         dimensions=("instrument", "day_obs"),
     )
 
