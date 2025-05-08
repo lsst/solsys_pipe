@@ -7,67 +7,74 @@ from . import utils
 
 #
 # pipetask run -p ssp-heliolinc.yaml -b "$REPO" -i u/mjuric/test-small -o u/mjuric/test-small-output --register-dataset-types
-# pipetask run -p ../pipelines/ssp-link.yaml -b "$REPO" -i u/mjuric/test-small -o u/mjuric/test-small-output -d "sspHypothesisBundle.id in (1, 4)"
+# pipetask run -p ../pipelines/ssp-link.yaml -b "$REPO" -i u/mjuric/test-small -o u/mjuric/test-small-output -d "ssp_hypothesis_bundle.id in (1, 4)"
 #
 # This task searches tracklets for objects findable by a given bundle of hypothesis.
 #
-# The sspHypothesisBundle ID is resolved to the actual hypotheses (the vector of numbers) by
-# extracting the rows with the same sspHypothesisBundle from a DataFrame stored as
+# The ssp_hypothesis_bundle ID is resolved to the actual hypotheses (the vector of numbers) by
+# extracting the rows with the same ssp_hypothesis_bundle from a DataFrame stored as
 # sspHypothesisDefinitions data type in the input collection.
 #
 
-class LinkConnections(lsst.pipe.base.PipelineTaskConnections,
-                           dimensions=("instrument", "sspHypothesisBundle")):
-    sspVisitInputs = connectionTypes.PrerequisiteInput(
+__all__ = [
+    "HeliolincTask",
+    "HeliolincConfig",
+]
+
+
+class HeliolincConnections(lsst.pipe.base.PipelineTaskConnections,
+                           dimensions=("instrument", "day_obs",
+                                       "ssp_hypothesis_table", "ssp_hypothesis_bundle")):
+    sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
-        name="sspVisitInputs"
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="visit_summary_dayobs_14"
     )
     sspTrackletSources = connectionTypes.Input(
         doc="sources that got included in tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
-        name="sspTrackletSources"
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="ssp_tracklet_sources"
     )
     sspTracklets = connectionTypes.Input(
         doc="summary data for tracklets",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
-        name="sspTracklets"
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="ssp_tracklets"
     )
     sspTrackletToSource = connectionTypes.Input(
         doc="indices connecting tracklets to sspTrackletSources",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
-        name="sspTrackletToSource"
+        dimensions=["instrument", "day_obs"],
+        storageClass="ArrowAstropy",
+        name="ssp_tracklet_to_source"
     )
     sspHypothesisTable = connectionTypes.PrerequisiteInput(
-        doc="hypotheses about asteroids' heliocentric radial motion",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        doc="hypotheses of asteroids' heliocentric radial motion",
+        dimensions=["ssp_hypothesis_table"],
+        storageClass="ArrowAstropy",
         name = "sspHypothesisTable",
     )
     sspEarthState = connectionTypes.PrerequisiteInput(
         doc="Heliocentric Cartesian position and velocity for Earth",
-        dimensions=["instrument"],
-        storageClass="DataFrame",
+        dimensions=[],
+        storageClass="ArrowAstropy",
         name = "sspEarthState",
     )
     sspLinkage = connectionTypes.Output(
         doc="one line summary of each linkage",
-        dimensions=("instrument", "sspHypothesisBundle"),
-        storageClass="DataFrame",
-        name = "sspLinkage",
+        dimensions=("instrument", "ssp_hypothesis_table", "ssp_hypothesis_bundle", "day_obs"),
+        storageClass="ArrowAstropy",
+        name = "ssp_linkages",
     )
     sspLinkageSources = connectionTypes.Output(
         doc="indices connecting linkages (clusters) to trackletSources",
-        dimensions=("instrument", "sspHypothesisBundle"),
-        storageClass="DataFrame",
-        name = "sspLinkageSources",
+        dimensions=("instrument", "ssp_hypothesis_table", "ssp_hypothesis_bundle", "day_obs"),
+        storageClass="ArrowAstropy",
+        name = "ssp_linkage_sources",
     )
 
-class LinkConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkConnections):
+class HeliolincConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=HeliolincConnections):
     MJDref = lsst.pex.config.Field(
         dtype=float,
         default=0.0,
@@ -147,29 +154,58 @@ class LinkConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkConn
         doc="Prints monitoring output."
         )
 
-class LinkTask(lsst.pipe.base.PipelineTask):
-    ConfigClass = LinkConfig
+class HeliolincTask(lsst.pipe.base.PipelineTask):
+    ConfigClass = HeliolincConfig
     _DefaultName = "link"
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-        hypothesis_id = butlerQC.quantum.dataId.sspHypothesisBundle.id
-        outputs = self.run(**inputs, sspHypothesisBundle=hypothesis_id)
+        bundle_id = butlerQC.quantum.dataId.ssp_hypothesis_bundle.id
+        outputs = self.run(**inputs, ssp_hypothesis_bundle=bundle_id)
         butlerQC.put(outputs, outputRefs)
 
-    def run(self, sspVisitInputs, sspTrackletSources, sspTracklets, sspTrackletToSource, sspHypothesisTable, sspEarthState, sspHypothesisBundle):
+    def run(self, sspVisitInputs, sspTrackletSources, sspTracklets, sspTrackletToSource, sspHypothesisTable, sspEarthState, ssp_hypothesis_bundle):
         """doc string 
            here
         """
 
         # copy all config parameters from the Task's config object
         # to heliolinx's native config object.
+        # Mask hypothesisTable to bundle_id == bundle_id
+
         config = hl.HeliolincConfig()
-        allvars = [item for item in dir(hl.HeliolincConfig) if not item.startswith("__")]
+        allvars = [item for item in dir(hl.HeliolincConfig) if not item.startswith("_")]
         for var in allvars:
             setattr(config, var, getattr(self.config, var))
 
         # convert dataframes to numpy array with dtypes that heliolinc expects
+        sspVisitInputs['startind'], sspVisitInputs['endind'] = -1, -1
+        sspVisitInputs = sspVisitInputs[
+                                       ['MJD', 'boresightRa', 'boresightDec', 'obsCode', 'observerX',
+                                         'observerY', 'observerZ', 'observerVX', 'observerVY',
+                                         'observerVZ', 'startind', 'endind', 'exposureTime']
+        ]
+        sspVisitInputs.rename_columns(
+            ['MJD', 'boresightRa', 'boresightDec', 'obsCode', 'observerX', 'observerY', 'observerZ',
+             'observerVX', 'observerVY', 'observerVZ', 'startind', 'endind', 'exposureTime'],
+            ['MJD', 'RA', 'Dec', 'obscode', 'X', 'Y', 'Z', 
+              'VX', 'VY', 'VZ', 'startind', 'endind', 'exptime']
+        )
+        # sspTrackletSources is all good :) 
+        # ssptracklets is all good :) 
+        # sspTrackletToSource is good :)
+        sspHypothesisTable = sspHypothesisTable[sspHypothesisTable['bundle_id'] == ssp_hypothesis_bundle]
+        sspHypothesisTable = sspHypothesisTable[['#r(AU)', 'rdot(AU/day)', 'mean_accel']]
+        sspHypothesisTable.rename_columns(['#r(AU)', 'rdot(AU/day)', 'mean_accel'],
+                                          ['HelioRad', 'R_dot', 'R_dubdot'])
+        sspEarthState = sspEarthState[
+            ['MJD', 'X', 'Y', 'Z', 'VX', 'VY', 'VZ']
+        ]
+        sspEarthState.rename_columns(['X', 'Y', 'Z', 'VX', 'VY', 'VZ'],
+                                     ['x', 'y', 'z', 'vx', 'vy', 'vz'])
+
+        print(sspVisitInputs)
+        print(sspTrackletSources)
         (sspLinkage, sspLinkageSources) = hl.heliolinc(config,
                                                        utils.df2numpy(sspVisitInputs,      "hlimage"),
                                                        utils.df2numpy(sspTrackletSources,  "hldet"),
