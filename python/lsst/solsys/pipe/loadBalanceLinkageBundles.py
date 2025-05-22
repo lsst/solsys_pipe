@@ -130,5 +130,5 @@ class LoadBalanceTask(PipelineTask):
             sspLoadBalancedLinkageSourceList[i].remove_column('loadBalanceIndex')
 
         return Struct(sspLoadBalancedLinkageList = sspLoadBalancedLinkageList,
-                                     sspLoadBalancedLinkageSourceList = sspLoadBalancedLinkageSourceList
-                                     )
+                      sspLoadBalancedLinkageSourceList = sspLoadBalancedLinkageSourceList
+                     )
