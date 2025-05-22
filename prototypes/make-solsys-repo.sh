@@ -58,5 +58,6 @@ butler register-dataset-type "$REPO" sspTracklets        ArrowAstropy instrument
 butler register-dataset-type "$REPO" sspVisitInputs      ArrowAstropy instrument day_obs
 butler register-dataset-type "$REPO" sspLinkage          ArrowAstropy instrument day_obs ssp_hypothesis_table ssp_hypothesis_bundle
 butler register-dataset-type "$REPO" sspLinkageSources   ArrowAstropy instrument day_obs ssp_hypothesis_table ssp_hypothesis_bundle
-
+butler register-dataset-type "$REPO" sspBalancedLinkage  ArrowAstropy instrument day_obs ssp_hypothesis_table ssp_balanced_index
+butler register-dataset-type "$REPO" sspBalancedLinkageSources ArrowAstropy instrument day_obs ssp_hypothesis_table ssp_balanced_index
 echo "Repository created in '$REPO'"
