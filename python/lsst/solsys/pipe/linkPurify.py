@@ -9,8 +9,8 @@ from . import utils
 # by heliolinc
 
 class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
-                           dimensions=("instrument", "day_obs",
-                                       "ssp_hypothesis_table", "ssp_hypothesis_bundle")):
+                            dimensions=("instrument", "day_obs",
+                                        "ssp_hypothesis_table", "ssp_hypothesis_bundle")):
     sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument", "day_obs"],
@@ -49,81 +49,81 @@ class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
     )
 
 class LinkPurifyConfig(lsst.pex.config.Config):
-  useorbMJD = lsst.pex.config.Field(
-      dtype=int,
-      default=1,
-      doc="Use the MJD of the orbit rather than the reference MJD, if available"
-      )
-  simptype = lsst.pex.config.Field(
-      dtype=int,
-      default=0,
-      doc="Type of simplex used to initialize orbit fitting"
-      )
-  ptpow = lsst.pex.config.Field(
-      dtype=int,
-      default=1,
-      doc="Exponent used for number of points in linkage quality metric"
-      )
-  nightpow = lsst.pex.config.Field(
-      dtype=int,
-      default=1,
-      doc="Exponent used for number of nights in linkage quality metric"
-      )
-  timepow = lsst.pex.config.Field(
-      dtype=int,
-      default=0,
-      doc="Exponent used for linkage time span in linkage quality metric"
-      )
-  rmspow = lsst.pex.config.Field(
-      dtype=int,
-      default=2,
-      doc="Negative of exponent used for astrometric RMS in linkage quality metric"
-      )
-  maxrms = lsst.pex.config.Field(
-      dtype=float,
-      default=1.0e5;
-      doc="Maximum scaled RMS in km for a viable linkage"
-      )
-  max_oop = lsst.pex.config.Field(
-      dtype=float,
-      default=1000.0
-      doc="Maximum scaled out-of-plane RMS in km for a viable linkage"
-      )
-  rejfrac = lsst.pex.config.Field(
-      dtype=float,
-      default=0.5,
-      doc="Maximum fraction of points that can be rejected"
-      )
-  maxrejnum = lsst.pex.config.Field(
-      dtype=int,
-      default=50,
-      doc="Maximum number of points that can be rejected"
-      )
-  max_astrom_rms = lsst.pex.config.Field(
-      dtype=float,
-      default=1.0,
-      doc="Maximum astrometric RMS in arcsec relative to best-fit orbit"
-      )
-  minobsnights = lsst.pex.config.Field(
+    useorbMJD = lsst.pex.config.Field(
+        dtype=int,
+        default=1,
+        doc="Use the MJD of the orbit rather than the reference MJD, if available"
+    )
+    simptype = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Type of simplex used to initialize orbit fitting"
+    )
+    ptpow = lsst.pex.config.Field(
+        dtype=int,
+        default=1,
+        doc="Exponent used for number of points in linkage quality metric"
+    )
+    nightpow = lsst.pex.config.Field(
+        dtype=int,
+        default=1,
+        doc="Exponent used for number of nights in linkage quality metric"
+    )
+    timepow = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Exponent used for linkage time span in linkage quality metric"
+    )
+    rmspow = lsst.pex.config.Field(
+        dtype=int,
+        default=2,
+        doc="Negative of exponent used for astrometric RMS in linkage quality metric"
+    )
+    maxrms = lsst.pex.config.Field(
+        dtype=float,
+        default=1.0e5,
+        doc="Maximum scaled RMS in km for a viable linkage"
+    )
+    max_oop = lsst.pex.config.Field(
+        dtype=float,
+        default=1000.0,
+        doc="Maximum scaled out-of-plane RMS in km for a viable linkage"
+    )
+    rejfrac = lsst.pex.config.Field(
+        dtype=float,
+        default=0.5,
+        doc="Maximum fraction of points that can be rejected"
+    )
+    maxrejnum = lsst.pex.config.Field(
+        dtype=int,
+        default=50,
+        doc="Maximum number of points that can be rejected"
+    )
+    max_astrom_rms = lsst.pex.config.Field(
+        dtype=float,
+        default=1.0,
+        doc="Maximum astrometric RMS in arcsec relative to best-fit orbit"
+    )
+    minobsnights = lsst.pex.config.Field(
         dtype=int,
         default=3,
         doc="Minimum number of distinct observing nights for a valid linkage"
-        )
-  minpointnum = lsst.pex.config.Field(
+    )
+    minpointnum = lsst.pex.config.Field(
         dtype=int,
         default=6,
         doc="Minimum number of individual detections for a valid linkage"
-        )
-  use_heliovane = lsst.pex.config.Field(
+    )
+    use_heliovane = lsst.pex.config.Field(
         dtype=int,
         default=0,
         doc="Are we analyzing data from heliovane rather than heliolinc?"
-        )
-  verbose = lsst.pex.config.Field(
-      dtype=int,
-      default=0,
-      doc="Prints monitoring output."
-      )
+    )
+    verbose = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Prints monitoring output."
+    )
 
 class LinkPurifyTask(lsst.pipe.base.PipelineTask):
     ConfigClass = LinkPurifyConfig
@@ -162,12 +162,14 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
         print(sspTrackletSources)
         print(sspLinkage)
         print(sspLinkageSources)
-        (sspLinkagePurified, sspLinkageSourcesPurified) = hl.linkPurify(config,
-                                                       utils.df2numpy(sspVisitInputs,      "hlimage"),
-                                                       utils.df2numpy(sspTrackletSources,  "hldet"),
-                                                       utils.df2numpy(sspLinkage,          "hlclust"),
-                                                       utils.df2numpy(sspLinkageSources,   "longpair"),
-                                                      )
+        (
+            sspLinkagePurified, sspLinkageSourcesPurified
+        ) = hl.linkPurify(config,
+                          utils.df2numpy(sspVisitInputs,      "hlimage"),
+                          utils.df2numpy(sspTrackletSources,  "hldet"),
+                          utils.df2numpy(sspLinkage,          "hlclust"),
+                          utils.df2numpy(sspLinkageSources,   "longpair"),
+                         )
 
         return lsst.pipe.base.Struct(sspLinkagePurified=sspLinkagePurified,
                                      sspLinkageSourcesPurified=sspLinkageSourcesPurified
