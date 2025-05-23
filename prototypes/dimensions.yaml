@@ -132,6 +132,8 @@ elements:
       - name: id
         type: int
         length: 64
+    requires:
+      - ssp_hypothesis_table
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage 
 

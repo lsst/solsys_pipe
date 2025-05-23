@@ -46,31 +46,31 @@ from lsst.pipe.tasks.postprocess import TableVStack
 _LOG = logging.getLogger(__name__)
 
 class LoadBalanceConnections(lsst.pipe.base.PipelineTaskConnections,
-                               dimensions=["instrument", "day_obs"]):
+                               dimensions=["instrument", "day_obs", "ssp_hypothesis_table"]):
     sspLinkageList = connectionTypes.Input(
         doc="",
-        dimensions=["day_obs", "ssp_hypothesis_bundle"],
+        dimensions=["day_obs", "ssp_hypothesis_table", "ssp_hypothesis_bundle"],
         storageClass="ArrowAstropy",
         name="ssp_linkages",
         multiple=True,
     )
     sspLinkageSourceList = connectionTypes.Input(
         doc="",
-        dimensions=["day_obs", "ssp_hypothesis_bundle"],
+        dimensions=["day_obs", "ssp_hypothesis_table", "ssp_hypothesis_bundle"],
         storageClass="ArrowAstropy",
         name="ssp_linkage_sources",
         multiple=True,
     )
     sspLoadBalancedLinkages = connectionTypes.Output(
         doc="",
-        dimensions=["day_obs", "ssp_balanced_index"],
+        dimensions=["day_obs", "ssp_hypothesis_table", "ssp_balanced_index"],
         storageClass="ArrowAstropy",
         name="ssp_balanced_linkages",
         multiple=True,
     )
     sspLoadBalancedLinkageSources = connectionTypes.Output(
         doc="",
-        dimensions=["day_obs", "ssp_balanced_index"],
+        dimensions=["day_obs", "ssp_hypothesis_table", "ssp_balanced_index"],
         storageClass="ArrowAstropy",
         name="ssp_balanced_linkage_sources",
         multiple=True,
