@@ -10,7 +10,7 @@ from . import utils
 
 class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
                             dimensions=("instrument", "day_obs",
-                                        "ssp_hypothesis_table", "ssp_hypothesis_bundle")):
+                                        "ssp_hypothesis_table", "ssp_balanced_index")):
     sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument", "day_obs"],
@@ -23,33 +23,33 @@ class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
         storageClass="ArrowAstropy",
         name="ssp_tracklet_sources"
     )
-    # Change all to load-balanced linkages
+ ######TODO: add "ssp_hypothesis_table" throughout the lower connection types
     sspLinkages = connectionTypes.Input(
         doc="one line summary of each linkage",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs"),
         storageClass="ArrowAstropy",
         name = "ssp_balanced_linkages",
     )
     sspLinkageSources = connectionTypes.Input(
         doc="indices connecting linkages (clusters) to trackletSources",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs"),
         storageClass="ArrowAstropy",
         name = "ssp_balanced_linkage_sources",
     )
     sspPurifiedLinkages = connectionTypes.Output(
         doc="one line summary of each purified linkage",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs"),
         storageClass="ArrowAstropy",
         name = "ssp_purified_linkages",
     )
     sspPurifiedLinkageSources = connectionTypes.Output(
         doc="indices connecting linkages (clusters) to trackletSources",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs"),
         storageClass="ArrowAstropy",
         name = "ssp_purified_linkage_sources",
     )
 
-class LinkPurifyConfig(lsst.pex.config.Config):
+class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkPurifyConnections):
     useorbMJD = lsst.pex.config.Field(
         dtype=int,
         default=1,
