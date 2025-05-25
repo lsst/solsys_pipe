@@ -64,14 +64,14 @@ class LoadBalanceConnections(PipelineTaskConnections,
     )
     sspLoadBalancedLinkages = connectionTypes.Output(
         doc="",
-        dimensions=["day_obs", "ssp_hypothesis_table", "ssp_balanced_index"],
+        dimensions=["day_obs", "ssp_balanced_index"],
         storageClass="ArrowAstropy",
         name="ssp_balanced_linkages",
         multiple=True,
     )
     sspLoadBalancedLinkageSources = connectionTypes.Output(
         doc="",
-        dimensions=["day_obs", "ssp_hypothesis_table", "ssp_balanced_index"],
+        dimensions=["day_obs", "ssp_balanced_index"],
         storageClass="ArrowAstropy",
         name="ssp_balanced_linkage_sources",
         multiple=True,
