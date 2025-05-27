@@ -9,8 +9,7 @@ from . import utils
 # by heliolinc
 
 class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
-                            dimensions=("instrument", "day_obs",
-                                        "ssp_hypothesis_table", "ssp_hypothesis_bundle")):
+                            dimensions=("instrument", "day_obs", "ssp_balanced_index", "ssp_hypothesis_table")):
     sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument", "day_obs"],
@@ -19,36 +18,36 @@ class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
     )
     sspTrackletSources = connectionTypes.Input(
         doc="sources that got included in tracklets",
-        dimensions=["instrument", "day_obs"],
+        dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
         name="ssp_tracklet_sources"
     )
-    sspLinkage = connectionTypes.Input(
+    sspBalancedLinkages = connectionTypes.Input(
         doc="one line summary of each linkage",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_hypothesis_bundle", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs", "ssp_hypothesis_table"),
         storageClass="ArrowAstropy",
-        name = "ssp_linkages",
+        name = "ssp_balanced_linkages",
     )
-    sspLinkageSources = connectionTypes.Input(
+    sspBalancedLinkageSources = connectionTypes.Input(
         doc="indices connecting linkages (clusters) to trackletSources",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_hypothesis_bundle", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs", "ssp_hypothesis_table"),
         storageClass="ArrowAstropy",
-        name = "ssp_linkage_sources",
+        name = "ssp_balanced_linkage_sources",
     )
-    sspLinkagePurified = connectionTypes.Output(
+    sspPurifiedLinkages = connectionTypes.Output(
         doc="one line summary of each linkage",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_hypothesis_bundle", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs", "ssp_hypothesis_table"),
         storageClass="ArrowAstropy",
-        name = "ssp_linkages",
+        name = "ssp_purified_linkages",
     )
-    sspLinkageSourcesPurified = connectionTypes.Output(
+    sspPurifiedLinkageSources = connectionTypes.Output(
         doc="indices connecting linkages (clusters) to trackletSources",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_hypothesis_bundle", "day_obs"),
+        dimensions=("instrument", "ssp_balanced_index", "day_obs", "ssp_hypothesis_table"),
         storageClass="ArrowAstropy",
-        name = "ssp_linkage_sources",
+        name = "ssp_purified_linkage_sources",
     )
 
-class LinkPurifyConfig(lsst.pex.config.Config):
+class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkPurifyConnections):
     useorbMJD = lsst.pex.config.Field(
         dtype=int,
         default=1,
@@ -136,7 +135,6 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
 
         # copy all config parameters from the Task's config object
         # to heliolinx's native config object.
-        # Mask hypothesisTable to bundle_id == bundle_id
 
         config = hl.LinkPurifyConfig()
         allvars = [item for item in dir(hl.LinkPurifyConfig) if not item.startswith("_")]
@@ -158,12 +156,8 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
         )
         # Other inputs are already in heliolinc-style format and should not need translation
 
-        print(sspVisitInputs)
-        print(sspTrackletSources)
-        print(sspLinkage)
-        print(sspLinkageSources)
         (
-            sspLinkagePurified, sspLinkageSourcesPurified
+            sspPurifiedLinkages, sspPurifiedLinkageSources
         ) = hl.linkPurify(config,
                           utils.df2numpy(sspVisitInputs,      "hlimage"),
                           utils.df2numpy(sspTrackletSources,  "hldet"),
@@ -171,6 +165,6 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
                           utils.df2numpy(sspLinkageSources,   "longpair"),
                          )
 
-        return lsst.pipe.base.Struct(sspLinkagePurified=sspLinkagePurified,
-                                     sspLinkageSourcesPurified=sspLinkageSourcesPurified
+        return lsst.pipe.base.Struct(sspPurifiedLinkages=sspPurifiedLinkages,
+                                     sspPurifiedLinkageSources=sspPurifiedLinkageSources
                                      )
