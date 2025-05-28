@@ -9,5 +9,5 @@ tasks:
       connections.visitSummaryInputName: visit_summary
   makeTracklets: lsst.solsys.pipe.makeTracklets.MakeTrackletsTask
   heliolinc: lsst.solsys.pipe.heliolinc.HeliolincTask
-  #  linkPurify: lsst.solsys.pipe.linkPurify.LinkPurifyTask
-  #  submitToMPC: lsst.solsys.pipe.submitToMPC.SubmitToMPCTask
+  linkPurify: lsst.solsys.pipe.linkPurify.LinkPurifyTask
+  submitToMPC: lsst.solsys.pipe.submitToMPC.SubmitToMPCTask
