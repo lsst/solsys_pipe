@@ -23,7 +23,7 @@ class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
         storageClass="ArrowAstropy",
         name="ssp_tracklet_sources"
     )
-    sspLinkages = connectionTypes.Input(
+    sspBalancedLinkages = connectionTypes.Input(
         doc="one line summary of each linkage",
         dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
         storageClass="ArrowAstropy",
@@ -129,7 +129,7 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
     ConfigClass = LinkPurifyConfig
     _DefaultName = "linkPurify"
 
-    def run(self, sspVisitInputs, sspTrackletSources, sspLinkages, sspLinkageSources):
+    def run(self, sspVisitInputs, sspTrackletSources, sspBalancedLinkages, sspBalancedLinkageSources):
         """doc string 
            here
         """
@@ -162,8 +162,8 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
         ) = hl.linkPurify(config,
                           utils.df2numpy(sspVisitInputs,      "hlimage"),
                           utils.df2numpy(sspTrackletSources,  "hldet"),
-                          utils.df2numpy(sspLinkages,         "hlclust"),
-                          utils.df2numpy(sspLinkageSources,   "longpair"),
+                          utils.df2numpy(sspBalancedLinkages,         "hlclust"),
+                          utils.df2numpy(sspBalancedLinkageSources,   "longpair"),
                          )
 
         return lsst.pipe.base.Struct(sspPurifiedLinkages=sspPurifiedLinkages,
