@@ -1,51 +1,52 @@
-import heliolinx.heliolinx as hl
-import lsst.pipe.base
-from lsst.pipe.base import connectionTypes
-import pandas as pd
-import numpy as np
-from . import utils
+#
+# LSST Data Management System
+# Copyright 2008-2016 AURA/LSST.
+#
+# This product includes software developed by the
+# LSST Project (http://www.lsst.org/).
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the LSST License Statement and
+# the GNU General Public License along with this program.  If not,
+# see <https://www.lsstcorp.org/LegalNotices/>.
+#
+
+__all__ = ("LoadBalanceConfig",
+           "LoadBalanceTask")
+
+import astropy.table
 import astropy.units as u
+from collections import defaultdict
 from datetime import datetime
+import heliolinx.heliolinx as hl
+import logging
+import numpy as np
+import pandas as pd
 
-import lsst.pipe.base.connectionTypes as connTypes
-from lsst.verify import Measurement, Datum
-from lsst.verify.tasks import AbstractMetadataMetricTask, MetricTask, MetricComputationError
-
-import lsst.afw.image as afwImage
-import lsst.afw.math as afwMath
-import lsst.pipe.base.connectionTypes as cT
+import lsst.pipe.base
 from lsst.pex.config import Config, ConfigField, ConfigurableField, Field
-from lsst.pipe.base import PipelineTask, PipelineTaskConfig, PipelineTaskConnections, NoWorkFound
-from lsst.pipe.tasks.background import (
-    FocalPlaneBackground,
-    FocalPlaneBackgroundConfig,
-    MaskObjectsTask,
-    SkyMeasurementTask,
+from lsst.pipe.base import (
+    connectionTypes,
+    NoWorkFound,
+    PipelineTask,
+    PipelineTaskConfig,
+    PipelineTaskConnections,
+    Struct
 )
 
-from collections import defaultdict
-import dataclasses
-import functools
-import logging
-import numbers
-import os
-import astropy.table
-from astro_metadata_translator.headers import merge_headers
-
-import lsst.geom
-import lsst.pipe.base as pipeBase
-import lsst.daf.base as dafBase
-from lsst.daf.butler.formatters.parquet import pandas_to_astropy
-import lsst.afw.table as afwTable
-from lsst.afw.image import ExposureSummaryStats, ExposureF
-from lsst.meas.base import SingleFrameMeasurementTask, DetectorVisitIdGeneratorConfig
-from lsst.obs.base.utils import strip_provenance_from_fits_header
-
-from lsst.pipe.tasks.postprocess import TableVStack
 
 _LOG = logging.getLogger(__name__)
 
-class LoadBalanceConnections(lsst.pipe.base.PipelineTaskConnections,
+class LoadBalanceConnections(PipelineTaskConnections,
                                dimensions=["instrument", "day_obs", "ssp_hypothesis_table"]):
     sspLinkageList = connectionTypes.Input(
         doc="",
@@ -77,14 +78,14 @@ class LoadBalanceConnections(lsst.pipe.base.PipelineTaskConnections,
     )
 
 
-class LoadBalanceConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LoadBalanceConnections):
+class LoadBalanceConfig(PipelineTaskConfig, pipelineConnections=LoadBalanceConnections):
     num_linkrefine_indices = Field(
         dtype=int,
         default=10,
         doc="Number of linkRefine quanta / output datasets"
     )
 
-class LoadBalanceTask(lsst.pipe.base.PipelineTask):
+class LoadBalanceTask(PipelineTask):
     ConfigClass = LoadBalanceConfig
     _DefaultName = "loadBalance"
 
@@ -128,6 +129,6 @@ class LoadBalanceTask(lsst.pipe.base.PipelineTask):
             sspLoadBalancedLinkageList[i].remove_column('loadBalanceIndex')
             sspLoadBalancedLinkageSourceList[i].remove_column('loadBalanceIndex')
 
-        return lsst.pipe.base.Struct(sspLoadBalancedLinkageList = sspLoadBalancedLinkageList,
+        return Struct(sspLoadBalancedLinkageList = sspLoadBalancedLinkageList,
                                      sspLoadBalancedLinkageSourceList = sspLoadBalancedLinkageSourceList
                                      )
