@@ -14,4 +14,5 @@ tasks:
     config:
       num_linkrefine_indices: 100
   linkPurify: lsst.solsys.pipe.linkPurify.LinkPurifyTask
+  linkMerge: lsst.solsys.pipe.linkMerge.LinkMergeTask
   #  submitToMPC: lsst.solsys.pipe.submitToMPC.SubmitToMPCTask
