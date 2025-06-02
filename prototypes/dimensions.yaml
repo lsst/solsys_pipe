@@ -125,6 +125,17 @@ elements:
     storage:
       cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage
 
+  ssp_balanced_index:
+    doc: >
+      Index for parallelization of linkPurify
+    keys:
+      - name: id
+        type: int
+        length: 64
+    requires:
+      - ssp_hypothesis_table
+    storage:
+      cls: lsst.daf.butler.registry.dimensions.table.TableDimensionRecordStorage 
 
   detector:
     doc: >
