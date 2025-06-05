@@ -36,6 +36,7 @@ import logging
 import numpy as np
 
 import lsst.pipe.base as pipeBase
+from lsst.resources import ResourcePath
 from astropy import units as u
 from astropy.table import Table
 from lsst.daf.base import DateTime
@@ -139,21 +140,6 @@ class ConsolidateSspTablesConfig(
         default='X05',
         doc="Observatory code MPC, defaults to X05"
     )
-    observatoryLongitude = lsst.pex.config.Field(
-        dtype=float,
-        default=289.25058,
-        doc="Observatory longitude from the MPC, defaults to X05"
-    )
-    observatoryParallaxCosine = lsst.pex.config.Field(
-        dtype=float,
-        default=0.864981,
-        doc="Observatory parallax cosine from the MPC, defaults to X05"
-    )
-    observatoryParallaxSine = lsst.pex.config.Field(
-        dtype=float,
-        default=-0.500958,
-        doc="Observatory parallax sine from the MPC, defaults to X05"
-    )
 
 
 class ConsolidateSspTablesTask(pipeBase.PipelineTask):
@@ -225,9 +211,9 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
         # Make an Astropy table of visitInfo entries.
         consolidatedVisitInfo = Table(rows=ccdEntries)
         consolidatedVisitInfo['obsCode'] = self.config.observatoryCode
-        image = consolidatedVisitInfo[['MJD', 'boresightRa', 'boresightDec', 'obsCode']].to_pandas().values
-        obsarr = (self.config.observatoryLongitude, self.config.observatoryParallaxCosine,
-                  self.config.observatoryParallaxSine)
+        image = consolidatedVisitInfo[['MJD', 'boresightRa', 'boresightDec', 'obsCode', 'exposureTime']].to_pandas().values
+        obsCodesTextLines = ResourcePath('resource://heliolinx/obsCodes.txt').read().decode().split('\n')
+        obsarr = solardg.parse_ObsCodes(obsCodesTextLines)
 
         earthpos = df2numpy(inputs["sspEarthState"].to_pandas().rename(columns={'X': 'x', 'Y': 'y', 'Z': 'z', 'VX': 'vx', 'VY': 'vy', 'VZ': 'vz'}), 'EarthState')
         result = np.array(solardg.image_add_observerpos(image, obsarr, earthpos))
