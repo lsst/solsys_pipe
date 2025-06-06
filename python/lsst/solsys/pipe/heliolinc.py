@@ -33,19 +33,19 @@ class HeliolincConnections(lsst.pipe.base.PipelineTaskConnections,
     )
     sspTrackletSources = connectionTypes.Input(
         doc="sources that got included in tracklets",
-        dimensions=["instrument", "day_obs"],
+        dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
         name="ssp_tracklet_sources"
     )
     sspTracklets = connectionTypes.Input(
         doc="summary data for tracklets",
-        dimensions=["instrument", "day_obs"],
+        dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
         name="ssp_tracklets"
     )
     sspTrackletToSource = connectionTypes.Input(
         doc="indices connecting tracklets to sspTrackletSources",
-        dimensions=["instrument", "day_obs"],
+        dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
         name="ssp_tracklet_to_source"
     )

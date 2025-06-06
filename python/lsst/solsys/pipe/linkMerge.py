@@ -4,13 +4,14 @@ import lsst.pex.config
 import lsst.pipe.base
 from lsst.pipe.base import connectionTypes
 from . import utils
+import astropy.table as tb
 
 # This task purifies and de-duplicates candidate asteroid linkages output
 # by heliolinc
 
-class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
-                            dimensions=("instrument", "day_obs",
-                                        "ssp_hypothesis_table", "ssp_balanced_index")):
+class LinkMergeConnections(lsst.pipe.base.PipelineTaskConnections,
+                             dimensions=("instrument", "day_obs",
+                                         "ssp_hypothesis_table")):
     sspVisitInputs = connectionTypes.Input(
         doc="visit stats plus observer coordinates",
         dimensions=["instrument", "day_obs"],
@@ -23,32 +24,35 @@ class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
         storageClass="ArrowAstropy",
         name="ssp_tracklet_sources"
     )
-    sspBalancedLinkages = connectionTypes.Input(
+    sspPurifiedLinkages = connectionTypes.Input(
         doc="one line summary of each linkage",
         dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
         storageClass="ArrowAstropy",
-        name = "ssp_balanced_linkages",
-    )
-    sspBalancedLinkageSources = connectionTypes.Input(
-        doc="indices connecting linkages (clusters) to trackletSources",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
-        storageClass="ArrowAstropy",
-        name = "ssp_balanced_linkage_sources",
-    )
-    sspPurifiedLinkages = connectionTypes.Output(
-        doc="one line summary of each purified linkage",
-        dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
-        storageClass="ArrowAstropy",
         name = "ssp_purified_linkages",
+        multiple=True
     )
-    sspPurifiedLinkageSources = connectionTypes.Output(
-        doc="indices connecting linkages (clusters) to trackletSources",
+    sspPurifiedLinkageSources = connectionTypes.Input(
+        doc="indices connecting linkages to trackletSources",
         dimensions=("instrument", "ssp_hypothesis_table", "ssp_balanced_index", "day_obs"),
         storageClass="ArrowAstropy",
         name = "ssp_purified_linkage_sources",
+        multiple=True
+    )
+    sspMergedLinkages = connectionTypes.Output(
+        doc="one line summary of each linkage",
+        dimensions=("instrument", "ssp_hypothesis_table", "day_obs"),
+        storageClass="ArrowAstropy",
+        name = "ssp_merged_linkages",
+    )
+    sspMergedLinkageSources = connectionTypes.Output(
+        doc="indices connecting linkages to trackletSources",
+        dimensions=("instrument", "ssp_hypothesis_table", "day_obs"),
+        storageClass="ArrowAstropy",
+        name = "ssp_merged_linkage_sources",
     )
 
-class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkPurifyConnections):
+
+class LinkMergeConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=LinkMergeConnections):
     useorbMJD = lsst.pex.config.Field(
         dtype=int,
         default=1,
@@ -125,18 +129,34 @@ class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Li
         doc="Prints monitoring output."
     )
 
-class LinkPurifyTask(lsst.pipe.base.PipelineTask):
-    ConfigClass = LinkPurifyConfig
-    _DefaultName = "linkPurify"
+class LinkMergeTask(lsst.pipe.base.PipelineTask):
+    ConfigClass = LinkMergeConfig
+    _DefaultName = "linkMerge"
 
-    def run(self, sspVisitInputs, sspTrackletSources, sspBalancedLinkages, sspBalancedLinkageSources):
+    def run(self, sspVisitInputs, sspTrackletSources, sspPurifiedLinkages, sspPurifiedLinkageSources):
         """doc string 
            here
         """
 
+        # consolidate stuff
+        n = 0
+        n_tables = len(sspPurifiedLinkages)
+        for i in range(n_tables):
+            sspLinkage = sspPurifiedLinkages[i]
+            sspLinkage['clusternum'] += n
+            sspPurifiedLinkages[i] = sspLinkage
+            sspLinkageSource = sspPurifiedLinkageSources[i]
+            sspLinkageSource['i1'] += n
+            sspPurifiedLinkageSources[i] = sspLinkageSource
+            n += len(sspLinkage)
+
+        print(f'consolidating {n_tables} linkage tables')
+        sspPurifiedLinkages = tb.vstack(sspPurifiedLinkages)
+        print(f'consolidating {n_tables} linkage source tables')
+        sspPurifiedLinkageSources = tb.vstack(sspPurifiedLinkageSources)
+
         # copy all config parameters from the Task's config object
         # to heliolinx's native config object.
-
         config = hl.LinkPurifyConfig()
         allvars = [item for item in dir(hl.LinkPurifyConfig) if not item.startswith("_")]
         for var in allvars:
@@ -158,14 +178,17 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
         # Other inputs are already in heliolinc-style format and should not need translation
 
         (
-            sspPurifiedLinkages, sspPurifiedLinkageSources
+            sspMergedLinkages, sspMergedLinkageSourceIndices
         ) = hl.linkPurify(config,
                           utils.df2numpy(sspVisitInputs,      "hlimage"),
                           utils.df2numpy(sspTrackletSources,  "hldet"),
-                          utils.df2numpy(sspBalancedLinkages,         "hlclust"),
-                          utils.df2numpy(sspBalancedLinkageSources,   "longpair"),
+                          utils.df2numpy(sspPurifiedLinkages,         "hlclust"),
+                          utils.df2numpy(sspPurifiedLinkageSources,   "longpair"),
                          )
 
-        return lsst.pipe.base.Struct(sspPurifiedLinkages=sspPurifiedLinkages,
-                                     sspPurifiedLinkageSources=sspPurifiedLinkageSources
+        sspMergedLinkageSources = sspTrackletSources[sspMergedLinkageSourceIndices['i2']]
+        sspMergedLinkageSources['clusternum'] = sspMergedLinkageSourceIndices['i1']
+
+        return lsst.pipe.base.Struct(sspMergedLinkages=sspMergedLinkages,
+                                     sspMergedLinkageSources=sspMergedLinkageSources,
                                      )

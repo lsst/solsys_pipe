@@ -9,6 +9,10 @@ tasks:
       connections.visitSummaryInputName: visit_summary
   makeTracklets: lsst.solsys.pipe.makeTracklets.MakeTrackletsTask
   heliolinc: lsst.solsys.pipe.heliolinc.HeliolincTask
-  loadBalance: lsst.solsys.pipe.loadBalanceLinkageBundles.LoadBalanceTask
-  #  linkPurify: lsst.solsys.pipe.linkPurify.LinkPurifyTask
+  loadBalance:
+    class: lsst.solsys.pipe.loadBalanceLinkageBundles.LoadBalanceTask
+    config:
+      num_linkrefine_indices: 100
+  linkPurify: lsst.solsys.pipe.linkPurify.LinkPurifyTask
+  linkMerge: lsst.solsys.pipe.linkMerge.LinkMergeTask
   #  submitToMPC: lsst.solsys.pipe.submitToMPC.SubmitToMPCTask
