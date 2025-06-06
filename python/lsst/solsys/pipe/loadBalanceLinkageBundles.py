@@ -47,7 +47,7 @@ from lsst.pipe.base import (
 _LOG = logging.getLogger(__name__)
 
 class LoadBalanceConnections(PipelineTaskConnections,
-                               dimensions=["instrument", "day_obs", "ssp_hypothesis_table"]):
+                             dimensions=["instrument", "day_obs", "ssp_hypothesis_table"]):
     sspLinkageList = connectionTypes.Input(
         doc="",
         dimensions=["day_obs", "ssp_hypothesis_table", "ssp_hypothesis_bundle"],
@@ -130,5 +130,5 @@ class LoadBalanceTask(PipelineTask):
             sspLoadBalancedLinkageSourceList[i].remove_column('loadBalanceIndex')
 
         return Struct(sspLoadBalancedLinkageList = sspLoadBalancedLinkageList,
-                                     sspLoadBalancedLinkageSourceList = sspLoadBalancedLinkageSourceList
-                                     )
+                      sspLoadBalancedLinkageSourceList = sspLoadBalancedLinkageSourceList
+                     )
