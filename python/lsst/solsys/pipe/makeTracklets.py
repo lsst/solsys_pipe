@@ -49,7 +49,7 @@ diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpo
 visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
 
 class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
-                               dimensions=["instrument", "day_obs"]):
+                               dimensions=["instrument", "day_obs", "ssp_hypothesis_table"]):
     sspDiaSourceInputs = connectionTypes.Input(
         doc="Table of unattributed sources",
         dimensions=["instrument", "day_obs"],
@@ -64,19 +64,19 @@ class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
     )
     sspTrackletSources = connectionTypes.Output(
         doc="sources that got included in tracklets",
-        dimensions=["instrument", "day_obs"],
+        dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
         name="ssp_tracklet_sources"
     )
     sspTracklets = connectionTypes.Output(
         doc="summary data for tracklets",
-        dimensions=["instrument", "day_obs"],
+        dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
         name="ssp_tracklets"
     )
     sspTrackletToSource = connectionTypes.Output(
         doc="indices connecting tracklets to sspTrackletSources",
-        dimensions=["instrument", "day_obs"],
+        dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
         name="ssp_tracklet_to_source"
     )

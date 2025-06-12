@@ -52,10 +52,10 @@ butler register-dataset-type "$REPO" visit_summary ExposureCatalog band instrume
 butler register-dataset-type "$REPO" sspEarthState       ArrowAstropy
 butler register-dataset-type "$REPO" sspHypothesisTable  ArrowAstropy ssp_hypothesis_table
 butler register-dataset-type "$REPO" sspDiaSourceInputs  ArrowAstropy instrument day_obs
-butler register-dataset-type "$REPO" sspTrackletSources  ArrowAstropy instrument day_obs
-butler register-dataset-type "$REPO" sspTrackletToSource ArrowAstropy instrument day_obs
-butler register-dataset-type "$REPO" sspTracklets        ArrowAstropy instrument day_obs
 butler register-dataset-type "$REPO" sspVisitInputs      ArrowAstropy instrument day_obs
+butler register-dataset-type "$REPO" sspTrackletSources  ArrowAstropy instrument day_obs ssp_hypothesis_table
+butler register-dataset-type "$REPO" sspTrackletToSource ArrowAstropy instrument day_obs ssp_hypothesis_table
+butler register-dataset-type "$REPO" sspTracklets        ArrowAstropy instrument day_obs ssp_hypothesis_table
 butler register-dataset-type "$REPO" sspLinkage          ArrowAstropy instrument day_obs ssp_hypothesis_table ssp_hypothesis_bundle
 butler register-dataset-type "$REPO" sspLinkageSources   ArrowAstropy instrument day_obs ssp_hypothesis_table ssp_hypothesis_bundle
 butler register-dataset-type "$REPO" sspBalancedLinkage  ArrowAstropy instrument day_obs ssp_hypothesis_table ssp_balanced_index
