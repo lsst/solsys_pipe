@@ -95,6 +95,7 @@ class ConsolidateSspTablesConnections(
     )
 
     def adjust_all_quanta(self, adjuster):
+        _LOG.info('adjusting quanta')
         """This will drop all quanta but the quantum for the latest day_obs
         and add the input data from those quanta to the latest day_obs.
         """
@@ -108,8 +109,9 @@ class ConsolidateSspTablesConnections(
 
         # Dynamically get data_id for the latest day_obs.
         data_id_latest = max(to_do, key=lambda d: d["day_obs"])
-
+        _LOG.info(str(len(to_do)))
         for data_id in to_do:
+            _LOG.info('one data_id')
             # data_id has keys: instrument, day_obs.
             if data_id == data_id_latest:
                 # Skip the latest day_obs. This is the one we want to keep.
@@ -164,7 +166,7 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
         # should be the same.
         visitsInDia = set(ref.dataId["visit"] for ref in inputDiaTableRefs)
         visitsInSummary = set(ref.dataId["visit"] for ref in inputVisitSummaryRefs)
-
+        print([ref.dataId for ref in inputDiaTableRefs][0], 'jake data id')
         # Some sanity checks.
         assert len(visitsInSummary) == len(inputVisitSummaryRefs), "Duplicate visits in visit summaries."
         assert visitsInDia == visitsInSummary, (
