@@ -2,7 +2,7 @@ import heliolinx.heliolinx as hl
 import heliolinx.solarsyst_dyn_geo as sdg
 import lsst.pex.config
 import lsst.pipe.base
-from lsst.pipe.base import connectionTypes, NoWorkFound
+from lsst.pipe.base import connectionTypes
 from . import utils
 
 # This task purifies and de-duplicates candidate asteroid linkages output
@@ -136,9 +136,6 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
 
         # copy all config parameters from the Task's config object
         # to heliolinx's native config object.
-
-        if len(sspBalancedLinkages) == 0:
-            raise NoWorkFound
 
         config = hl.LinkPurifyConfig()
         allvars = [item for item in dir(hl.LinkPurifyConfig) if not item.startswith("_")]
