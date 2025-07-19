@@ -124,14 +124,10 @@ class LoadBalanceTask(PipelineTask):
         sspLoadBalancedLinkageList = [t for t in sspLinkage.group_by('loadBalanceIndex').groups]
         sspLoadBalancedLinkageSourceList = [t for t in sspLinkageSource.group_by('loadBalanceIndex').groups]
         for i in range(n_ind):
-            if len(sspLoadBalancedLinkageList) <= i:
-                sspLoadBalancedLinkageList.append(astropy.table.Table())
-                sspLoadBalancedLinkageSourceList.append(astropy.table.Table())
-            else:
-                sspLoadBalancedLinkageList[i]['clusternum'] //= n_ind
-                sspLoadBalancedLinkageSourceList[i]['i1'] //= n_ind
-                sspLoadBalancedLinkageList[i].remove_column('loadBalanceIndex')
-                sspLoadBalancedLinkageSourceList[i].remove_column('loadBalanceIndex')
+            sspLoadBalancedLinkageList[i]['clusternum'] //= n_ind
+            sspLoadBalancedLinkageSourceList[i]['i1'] //= n_ind
+            sspLoadBalancedLinkageList[i].remove_column('loadBalanceIndex')
+            sspLoadBalancedLinkageSourceList[i].remove_column('loadBalanceIndex')
 
         return Struct(sspLoadBalancedLinkageList = sspLoadBalancedLinkageList,
                       sspLoadBalancedLinkageSourceList = sspLoadBalancedLinkageSourceList
