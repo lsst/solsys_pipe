@@ -31,17 +31,18 @@ __all__ = [
 ]
 
 
-from heliolinx import solarsyst_dyn_geo as solardg
 import logging
-import numpy as np
+import uuid
 
+import lsst.pex.config
 import lsst.pipe.base as pipeBase
-from lsst.resources import ResourcePath
+import numpy as np
 from astropy import units as u
 from astropy.table import Table
+from heliolinx import solarsyst_dyn_geo as solardg
 from lsst.daf.base import DateTime
-import lsst.pex.config
 from lsst.pipe.tasks.postprocess import TableVStack
+from lsst.resources import ResourcePath
 from lsst.solsys.pipe.utils import df2numpy
 
 _LOG = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ class ConsolidateSspTablesConnections(
     pipeBase.PipelineTaskConnections,
     defaultTemplates={
         "diaSourceInputName": "dia_source_detector",
+        "earthStateInputName": "sspEarthState",
         "diaSourceOutputName": "dia_source_dayobs_14",
         "visitSummaryInputName": "visit_summary",
         "visitInfoOutputName": "visit_summary_dayobs_14",
@@ -59,11 +61,12 @@ class ConsolidateSspTablesConnections(
 ):
     sspEarthState = pipeBase.connectionTypes.PrerequisiteInput(
         doc="Heliocentric Cartesian position and velocity for Earth",
-        dimensions=[],
+        name="{earthStateInputName}",
         storageClass="ArrowAstropy",
-        name = "sspEarthState",
+        dimensions=(),
+        deferLoad=True,
     )
-    inputDiaTables = pipeBase.connectionTypes.Input(
+    inputDiaTables = pipeBase.connectionTypes.PrerequisiteInput(
         doc="Input Source Tables to be concatenated",
         name="{diaSourceInputName}",
         storageClass="ArrowAstropy",
@@ -71,7 +74,7 @@ class ConsolidateSspTablesConnections(
         multiple=True,
         deferLoad=True,
     )
-    inputVisitSummaries = pipeBase.connectionTypes.Input(
+    inputVisitSummaries = pipeBase.connectionTypes.PrerequisiteInput(
         doc="Per-visit consolidated exposure metadata",
         name="{visitSummaryInputName}",
         storageClass="ExposureCatalog",
@@ -95,6 +98,7 @@ class ConsolidateSspTablesConnections(
     )
 
     def adjust_all_quanta(self, adjuster):
+        _LOG.info("adjusting quanta")
         """This will drop all quanta but the quantum for the latest day_obs
         and add the input data from those quanta to the latest day_obs.
         """
@@ -109,36 +113,35 @@ class ConsolidateSspTablesConnections(
         # Dynamically get data_id for the latest day_obs.
         data_id_latest = max(to_do, key=lambda d: d["day_obs"])
 
+        # Loop over all data_id's in the to_do set. We will keep the latest
+        # day_obs and add all the input data from the other day_obs to it.
         for data_id in to_do:
             # data_id has keys: instrument, day_obs.
             if data_id == data_id_latest:
                 # Skip the latest day_obs. This is the one we want to keep.
                 continue
-            inputs = adjuster.get_inputs(data_id)
-            # Since `multiple=True`, we need to loop over all input Refs.
-            for input_data_id in inputs["inputDiaTables"]:
-                # input_data_id has keys: instrument, visit, detector.
-                # Add the input data taken from current data_id to the latest
-                # day_obs.
-                adjuster.add_input(data_id_latest, "inputDiaTables", input_data_id)
-                # data_id_visit_summary has keys: instrument, visit.
-                # We remove the detector key from data_id in the line below.
-                data_id_visit_summary = input_data_id.subset(dimensions=self.inputVisitSummaries.dimensions)
-                adjuster.add_input(data_id_latest, "inputVisitSummaries", data_id_visit_summary)
+            inputs = adjuster.get_prerequisite_inputs(data_id)
+            # In the three for loops below, we loop over all input refs with
+            # the same data_id as the current data_id in the loop and add
+            # their input data to the quantum for the latest day_obs.
+            for input_uuid in inputs["inputDiaTables"]:
+                adjuster.add_prerequisite_input(data_id_latest, "inputDiaTables", input_uuid)
+            for input_uuid in inputs["inputVisitSummaries"]:
+                adjuster.add_prerequisite_input(data_id_latest, "inputVisitSummaries", input_uuid)
             adjuster.remove_quantum(data_id)
 
         # Log that the last day_obs is being kept as a reference.
-        _LOG.info(f"Combined inputs from {len(to_do)} quanta into one quantum "
-                  f"under reference day_obs {data_id_latest['day_obs']}.")
+        _LOG.info(
+            f"Combined inputs from {len(to_do)} quanta into one quantum "
+            f"under reference day_obs {data_id_latest['day_obs']}."
+        )
 
 
 class ConsolidateSspTablesConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateSspTablesConnections
 ):
     observatoryCode = lsst.pex.config.Field(
-        dtype=str,
-        default='X05',
-        doc="Observatory code MPC, defaults to X05"
+        dtype=str, default="X05", doc="Observatory code MPC, defaults to X05"
     )
 
 
@@ -164,7 +167,6 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
         # should be the same.
         visitsInDia = set(ref.dataId["visit"] for ref in inputDiaTableRefs)
         visitsInSummary = set(ref.dataId["visit"] for ref in inputVisitSummaryRefs)
-
         # Some sanity checks.
         assert len(visitsInSummary) == len(inputVisitSummaryRefs), "Duplicate visits in visit summaries."
         assert visitsInDia == visitsInSummary, (
@@ -205,21 +207,31 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
             )
             ccdEntries.append(entry)
 
-            # We ideally want the observatory code e.g. X05 for LSST, but
-            # this is not available in visitInfo.
+            # We ideally want the observatory code e.g. X05 for LSST, from
+            # visitInfo, but since it's not available there, we retrieve it
+            # from config instead (see below).
 
         # Make an Astropy table of visitInfo entries.
         consolidatedVisitInfo = Table(rows=ccdEntries)
-        consolidatedVisitInfo['obsCode'] = self.config.observatoryCode
-        image = consolidatedVisitInfo[['MJD', 'boresightRa', 'boresightDec', 'obsCode', 'exposureTime']].to_pandas().values
-        obsCodesTextLines = ResourcePath('resource://heliolinx/obsCodes.txt').read().decode().split('\n')
+        consolidatedVisitInfo["obsCode"] = self.config.observatoryCode
+        image = (
+            consolidatedVisitInfo[["MJD", "boresightRa", "boresightDec", "obsCode", "exposureTime"]]
+            .to_pandas()
+            .values
+        )
+        obsCodesTextLines = ResourcePath("resource://heliolinx/obsCodes.txt").read().decode().split("\n")
         obsarr = solardg.parse_ObsCodes(obsCodesTextLines)
 
-        earthpos = df2numpy(inputs["sspEarthState"].to_pandas().rename(columns={'X': 'x', 'Y': 'y', 'Z': 'z', 'VX': 'vx', 'VY': 'vy', 'VZ': 'vz'}), 'EarthState')
+        earthpos = df2numpy(
+            inputs["sspEarthState"].get()
+            .to_pandas()
+            .rename(columns={"X": "x", "Y": "y", "Z": "z", "VX": "vx", "VY": "vy", "VZ": "vz"}),
+            "EarthState",
+        )
         result = np.array(solardg.image_add_observerpos(image, obsarr, earthpos))
 
-        for col in ['X', 'Y', 'Z', 'VX', 'VY', 'VZ']:
-            consolidatedVisitInfo['observer' + col] = result[col]
+        for col in ["X", "Y", "Z", "VX", "VY", "VZ"]:
+            consolidatedVisitInfo["observer" + col] = result[col]
 
         # Assign units to relevant columns.
         consolidatedVisitInfo["exposureTime"].unit = u.second
