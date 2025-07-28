@@ -96,6 +96,12 @@ class ConsolidateSspTablesConnections(
         dimensions=("instrument", "day_obs"),
     )
 
+    def __init__(self, *, config=None):
+        super().__init__(config=config)
+
+        if not config.consolidateVisitTables:
+            self.prerequisiteInputs.remove("inputVisitSummaries")
+
     def adjust_all_quanta(self, adjuster):
         """This will drop all quanta but the quantum for the latest day_obs
         and add the input data from those quanta to the latest day_obs.
@@ -134,6 +140,10 @@ class ConsolidateSspTablesConnections(
             f"under reference day_obs {data_id_latest['day_obs']}."
         )
 
+
+diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
+                             'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA',
+                             'sourceId': 'idstring', 'expTime': 'exptime'}
 
 class ConsolidateSspTablesConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateSspTablesConnections
@@ -179,3 +189,4 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
             pipeBase.Struct(outputDiaTable=consolidatedDiaTable, outputVisitInfo=consolidatedVisitTable),
             outputRefs,
         )
+
