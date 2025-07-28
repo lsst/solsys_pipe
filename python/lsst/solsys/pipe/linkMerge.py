@@ -162,21 +162,6 @@ class LinkMergeTask(lsst.pipe.base.PipelineTask):
         for var in allvars:
             setattr(config, var, getattr(self.config, var))
 
-        # convert dataframes to numpy array with dtypes that heliolinc expects
-        sspVisitInputs['startind'], sspVisitInputs['endind'] = -1, -1
-        sspVisitInputs = sspVisitInputs[
-                                       ['MJD', 'boresightRa', 'boresightDec', 'obsCode', 'observerX',
-                                         'observerY', 'observerZ', 'observerVX', 'observerVY',
-                                         'observerVZ', 'startind', 'endind', 'exposureTime']
-        ]
-        sspVisitInputs.rename_columns(
-            ['MJD', 'boresightRa', 'boresightDec', 'obsCode', 'observerX', 'observerY', 'observerZ',
-             'observerVX', 'observerVY', 'observerVZ', 'startind', 'endind', 'exposureTime'],
-            ['MJD', 'RA', 'Dec', 'obscode', 'X', 'Y', 'Z', 
-              'VX', 'VY', 'VZ', 'startind', 'endind', 'exptime']
-        )
-        # Other inputs are already in heliolinc-style format and should not need translation
-
         (
             sspMergedLinkages, sspMergedLinkageSourceIndices
         ) = hl.linkPurify(config,
