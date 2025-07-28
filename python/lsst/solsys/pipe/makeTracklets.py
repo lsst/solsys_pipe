@@ -44,8 +44,6 @@ from lsst.obs.base.utils import strip_provenance_from_fits_header
 from lsst.pipe.tasks.postprocess import TableVStack
 
 _LOG = logging.getLogger(__name__)
-diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
-                             'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA'}
 visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
 
 class MakeTrackletsConnections(lsst.pipe.base.PipelineTaskConnections,
@@ -93,11 +91,6 @@ diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpo
 visitSummaryColumnRenameDict = {'MJD': 'MJD', 'boresightRa': 'RA', 'boresightDec': 'Dec', 'exposureTime': 'exptime'}
 
 class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections):
-    obscode = Field(
-        dtype=str,
-        default="X05",
-        doc="MPC code of observatory"
-    )
     mintrkpts = Field(
         dtype=int,
         default=2,
@@ -192,22 +185,11 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         for config_name in configs_to_transfer:
             setattr(config, config_name, getattr(self.config, config_name))
 
-        sspDiaSourceInputs = sspDiaSourceInputs.rename(columns = diaSourceColumnRenameDict)
-        sspDiaSourceInputs = sspDiaSourceInputs[['MJD', 'RA', 'Dec', 'idstring']]
-        sspDiaSourceInputs['idstring'] = sspDiaSourceInputs['idstring'].astype(str)
-        sspDiaSourceInputs['obscode'] = self.config.obscode
+        hldet = utils.make_hldet(sspDiaSourceInputs)
 
-        sspVisitInputs = sspVisitInputs.rename(columns = visitSummaryColumnRenameDict)
-        sspVisitInputs = sspVisitInputs[['MJD', 'RA', 'Dec', 'exptime']]
-        sspVisitInputs['obscode'] = self.config.obscode
-        # convert dataframes to numpy array with dtypes that heliolinc expects
-        # hldet_array = sspDiaSourceInputs.to_numpy()
-        # hlimage_array = sspVisitInputs.to_numpy()
-        # hldet = np.array(list(zip(hldet_array)), dtype=[("hldet", hldet_array.dtype)])
-        # hlimage = np.array(list(zip(hlimage_array)), dtype=[("hlimage", hlimage_array.dtype)])
-        # (dets, tracklets, trac2det) = hl.makeTracklets(config, hldet, hlimage)
+        print(sspVisitInputs)
         (dets, tracklets, trac2det) = hl.makeTracklets(config,
-                                                       utils.make_hldet(sspDiaSourceInputs),
+                                                       hldet,
                                                        utils.make_hlimage(sspVisitInputs),
                                                       )
         _LOG.info(f'makeTracklets finished: {len(dets)} detections, {len(tracklets)} tracklets')
