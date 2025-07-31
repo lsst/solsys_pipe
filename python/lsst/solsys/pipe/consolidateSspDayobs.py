@@ -103,7 +103,7 @@ class ConsolidateSspDayobsConnections(
             self.prerequisiteInputs.remove("inputVisitSummaries")
 
 
-diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'visit': 'image', 'midpointMjdTai': 'MJD',
+diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'midpointMjdTai': 'MJD',
                              'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA',
                              'sourceId': 'idstring', 'expTime': 'exptime'}
 
@@ -134,8 +134,6 @@ class ConsolidateSspDayobsTask(pipeBase.PipelineTask):
         # Let's make the order deterministic by sorting the input Refs.
         inputDiaTableRefs.sort(key=lambda x: (x.dataId["visit"]))
 
-        # Visits in the visit summaries and unique visits in the DIA tables
-        # should be the same.
         visitsInDia = set(ref.dataId["visit"] for ref in inputDiaTableRefs)
 
         self.log.info(
@@ -146,13 +144,12 @@ class ConsolidateSspDayobsTask(pipeBase.PipelineTask):
         # them all in memory at once.
         consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs).to_pandas()
         consolidatedDiaTable = consolidatedDiaTable.rename(columns=diaSourceColumnRenameDict)
-        consolidatedDiaTable = consolidatedDiaTable[['MJD', 'RA', 'Dec', 'idstring']]
+        consolidatedDiaTable = consolidatedDiaTable[['visit', 'MJD', 'RA', 'Dec', 'idstring']]
         consolidatedDiaTable['idstring'] = consolidatedDiaTable['idstring'].astype(str)
         consolidatedDiaTable['obscode'] = self.config.observatoryCode
 
         obsCodesTextLines = ResourcePath("resource://heliolinx/obsCodes.txt").read().decode().split("\n")
         obsarr = solardg.parse_ObsCodes(obsCodesTextLines)
-
         earthpos = df2numpy(
             inputs["sspEarthState"]
             .get()
@@ -160,7 +157,6 @@ class ConsolidateSspDayobsTask(pipeBase.PipelineTask):
             .rename(columns={"X": "x", "Y": "y", "Z": "z", "VX": "vx", "VY": "vy", "VZ": "vz"}),
             "EarthState",
         )
-
         if self.config.consolidateVisitTables:
             inputVisitSummaryRefs = inputs["inputVisitSummaries"]
             inputVisitSummaryRefs.sort(key=lambda x: x.dataId["visit"])
@@ -211,17 +207,17 @@ class ConsolidateSspDayobsTask(pipeBase.PipelineTask):
             newimage = np.array(solardg.image_add_observerpos(image, obsarr, earthpos))
 
         else:
-            hldet = utils.make_hldet(consolidatedDiaTable)
-            image = solardg.make_image_table(hldet)
-            mjd, ra, dec, obscode = image.T
+            def center(numbers):
+                return (np.min(numbers) + np.max(numbers))/2
+            groupby = consolidatedDiaTable[['visit', 'MJD', 'RA', 'Dec']].groupby('visit')
+            mjd, ra, dec = groupby.aggregate(center).values.T
             mjd = mjd.astype(str).astype(float)
             ra = ra.astype(str).astype(float)
             dec = dec.astype(str).astype(float)
-            obscode = obscode.astype(str)
-            expTime = np.ones_like(ra) * 30.0  # TODO: Make exact.
+            obscode = np.repeat(self.config.observatoryCode, len(dec))
+            expTime = np.repeat(30.0, len(dec))  # TODO: Make exact.
             image = np.array([mjd, ra, dec, obscode, expTime]).T
             newimage = solardg.image_add_observerpos(image, obsarr, earthpos)
-
         consolidatedVisitInfo = Table(newimage, names=['MJD', 'RA', 'Dec', 'obscode', 'X', 'Y', 'Z', 
                                                        'VX', 'VY', 'VZ', 'startind', 'endind', 'exptime'])
         # Assign units to relevant columns.
@@ -229,6 +225,8 @@ class ConsolidateSspDayobsTask(pipeBase.PipelineTask):
         consolidatedVisitInfo["MJD"].unit = u.day
         consolidatedVisitInfo["RA"].unit = u.deg
         consolidatedVisitInfo["Dec"].unit = u.deg
+
+        consolidatedDiaTable = consolidatedDiaTable[['MJD', 'RA', 'Dec', 'idstring']]
 
         butlerQC.put(
             pipeBase.Struct(outputDiaTable=consolidatedDiaTable, outputVisitInfo=consolidatedVisitInfo),
