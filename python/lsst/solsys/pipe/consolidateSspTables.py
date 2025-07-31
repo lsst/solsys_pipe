@@ -123,10 +123,9 @@ class ConsolidateSspTablesConnections(
             # the same data_id as the current data_id in the loop and add
             # their input data to the quantum for the latest day_obs.
             for input_data_id in inputs["inputDiaTables"]:
-                adjuster.add_prerequisite_input(data_id_latest, "inputDiaTables", input_data_id)
-            if self.config.consolidateVisitTables:
-                for input_data_id in inputs["inputVisitSummaries"]:
-                    adjuster.add_prerequisite_input(data_id_latest, "inputVisitSummaries", input_data_id)
+                adjuster.add_input(data_id_latest, "inputDiaTables", input_data_id)
+            for input_data_id in inputs["inputVisitSummaries"]:
+                adjuster.add_input(data_id_latest, "inputVisitSummaries", input_data_id)
             adjuster.remove_quantum(data_id)
 
         # Log that the last day_obs is being kept as a reference.
@@ -139,9 +138,7 @@ class ConsolidateSspTablesConnections(
 class ConsolidateSspTablesConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateSspTablesConnections
 ):
-    dummy = lsst.pex.config.Field(
-        dtype=bool, default=True, doc="dummy"
-    )
+    pass
 
 
 class ConsolidateSspTablesTask(pipeBase.PipelineTask):
@@ -160,10 +157,10 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
 
         # Visits in the visit summaries and unique visits in the DIA tables
         # should be the same.
-        day_obsInDia = set(ref.dataId["day_obs"] for ref in inputDiaTableRefs)
+        dayObsInDia = set(ref.dataId["day_obs"] for ref in inputDiaTableRefs)
 
         self.log.info(
-            f"Concatenating {len(inputDiaTableRefs)} DIA source tables over {len(day_obsInDia)} day_obs.",
+            f"Concatenating {len(inputDiaTableRefs)} DIA source tables over {len(dayObsInDia)} day_obs.",
         )
 
         # Concatenate the input DIA tables into a single table without having
@@ -172,9 +169,9 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
 
         inputVisitSummaryRefs = inputs["inputVisitSummaries"]
         inputVisitSummaryRefs.sort(key=lambda x: x.dataId["day_obs"])
-        day_obsInVisit = set(ref.dataId["day_obs"] for ref in inputVisitSummaryRefs)
+        dayObsInVisit = set(ref.dataId["day_obs"] for ref in inputVisitSummaryRefs)
         self.log.info(
-            f"Concatenating {len(inputVisitSummaryRefs)} visit summary tables over {len(day_obsInVisit)} day_obs.",
+            f"Concatenating {len(inputVisitSummaryRefs)} visit summary tables over {len(dayObsInVisit)} day_obs.",
         )
         consolidatedVisitTable = TableVStack.vstack_handles(inputVisitSummaryRefs).to_pandas()
 
