@@ -20,9 +20,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-"""A per-dayobs task which takes `goodSeeingDiff_assocDiaSrc` or
-`goodSeeingDiff_diaSrcTable` from the last 14 (config-settable) days and
-consolidates them into a `sspVisitInputs` as defined in `makeTracklets.py`
+"""A task which takes per-dayobs source tables and visit summaries and
+consolidates them into multi-day tables. 
 """
 
 __all__ = [
@@ -36,6 +35,7 @@ import logging
 import lsst.pex.config
 import lsst.pipe.base as pipeBase
 import numpy as np
+from . import utils
 from astropy import units as u
 from astropy.table import Table
 from heliolinx import solarsyst_dyn_geo as solardg
@@ -50,10 +50,10 @@ _LOG = logging.getLogger(__name__)
 class ConsolidateSspTablesConnections(
     pipeBase.PipelineTaskConnections,
     defaultTemplates={
-        "diaSourceInputName": "dia_source_detector",
+        "diaSourceInputName": "dia_source_dayobs",
         "earthStateInputName": "sspEarthState",
         "diaSourceOutputName": "dia_source_dayobs_14",
-        "visitSummaryInputName": "visit_summary",
+        "visitSummaryInputName": "visit_summary_dayobs",
         "visitInfoOutputName": "visit_summary_dayobs_14",
     },
     dimensions=("instrument", "day_obs"),
@@ -65,32 +65,32 @@ class ConsolidateSspTablesConnections(
         dimensions=(),
         deferLoad=True,
     )
-    inputDiaTables = pipeBase.connectionTypes.PrerequisiteInput(
-        doc="Input Source Tables to be concatenated",
+    inputDiaTables = pipeBase.connectionTypes.Input(
+        doc="Per-dayobs tables to be concatenated",
         name="{diaSourceInputName}",
         storageClass="ArrowAstropy",
-        dimensions=("instrument", "visit", "detector"),
+        dimensions=("instrument", "day_obs"),
         multiple=True,
         deferLoad=True,
     )
-    inputVisitSummaries = pipeBase.connectionTypes.PrerequisiteInput(
-        doc="Per-visit consolidated exposure metadata",
+    inputVisitSummaries = pipeBase.connectionTypes.Input(
+        doc="Per-dayobs consolidated exposure metadata",
         name="{visitSummaryInputName}",
-        storageClass="ExposureCatalog",
-        dimensions=("instrument", "visit"),
+        storageClass="ArrowAstropy",
+        dimensions=("instrument", "day_obs"),
         multiple=True,
         deferLoad=True,
     )
     outputDiaTable = pipeBase.connectionTypes.Output(
-        doc="Concatenated Source Table from all day_obs in the input. The day_obs"
-        "dimension would be the day_obs of the latest day_obs in the input.",
+        doc="Concatenated source table from all day_obs in the input with day_obs"
+        "dimension of the the latest day_obs in the input.",
         name="{diaSourceOutputName}",
         storageClass="DataFrame",
         dimensions=("instrument", "day_obs"),
     )
     outputVisitInfo = pipeBase.connectionTypes.Output(
-        doc="Concatenated Visit Summary from all day_obs in the input. The day_obs"
-        "dimension would be the day_obs of the latest day_obs in the input.",
+        doc="Concatenated visit summary from all day_obs in the input with day_obs"
+        "dimension of the latest day_obs in the input.",
         name="{visitInfoOutputName}",
         storageClass="DataFrame",
         dimensions=("instrument", "day_obs"),
@@ -118,14 +118,14 @@ class ConsolidateSspTablesConnections(
             if data_id == data_id_latest:
                 # Skip the latest day_obs. This is the one we want to keep.
                 continue
-            inputs = adjuster.get_prerequisite_inputs(data_id)
+            inputs = adjuster.get_inputs(data_id)
             # In the three for loops below, we loop over all input refs with
             # the same data_id as the current data_id in the loop and add
             # their input data to the quantum for the latest day_obs.
             for input_uuid in inputs["inputDiaTables"]:
-                adjuster.add_prerequisite_input(data_id_latest, "inputDiaTables", input_uuid)
+                adjuster.add_input(data_id_latest, "inputDiaTables", input_uuid)
             for input_uuid in inputs["inputVisitSummaries"]:
-                adjuster.add_prerequisite_input(data_id_latest, "inputVisitSummaries", input_uuid)
+                adjuster.add_input(data_id_latest, "inputVisitSummaries", input_uuid)
             adjuster.remove_quantum(data_id)
 
         # Log that the last day_obs is being kept as a reference.
@@ -138,8 +138,8 @@ class ConsolidateSspTablesConnections(
 class ConsolidateSspTablesConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateSspTablesConnections
 ):
-    observatoryCode = lsst.pex.config.Field(
-        dtype=str, default="X05", doc="Observatory code MPC, defaults to X05"
+    dummy = lsst.pex.config.Field(
+        dtype=bool, default=True, doc="dummy"
     )
 
 
@@ -153,92 +153,31 @@ class ConsolidateSspTablesTask(pipeBase.PipelineTask):
         """Concatenate the input source tables into a single output table."""
         inputs = butlerQC.get(inputRefs)
         inputDiaTableRefs = inputs["inputDiaTables"]
-        inputVisitSummaryRefs = inputs["inputVisitSummaries"]
 
         # Let's make the order deterministic by sorting the input Refs.
-        inputDiaTableRefs.sort(key=lambda x: (x.dataId["visit"], x.dataId["detector"]))
-
-        # Sort by visit only since no detector key in visitSummary dataId.
-        inputVisitSummaryRefs.sort(key=lambda x: x.dataId["visit"])
+        inputDiaTableRefs.sort(key=lambda x: (x.dataId["day_obs"]))
 
         # Visits in the visit summaries and unique visits in the DIA tables
         # should be the same.
-        visitsInDia = set(ref.dataId["visit"] for ref in inputDiaTableRefs)
-        visitsInSummary = set(ref.dataId["visit"] for ref in inputVisitSummaryRefs)
-        # Some sanity checks.
-        assert len(visitsInSummary) == len(inputVisitSummaryRefs), "Duplicate visits in visit summaries."
-        assert visitsInDia == visitsInSummary, (
-            f"Mismatch in visits: {len(visitsInSummary)} visits in visit summaries, "
-            f"{len(visitsInDia)} unique visits in DIA tables."
-        )
+        day_obsInDia = set(ref.dataId["day_obs"] for ref in inputDiaTableRefs)
 
         self.log.info(
-            f"Concatenating {len(inputVisitSummaryRefs)} visit summaries and {len(inputDiaTableRefs)} "
-            f"DIA source tables over {len(visitsInDia)} visits.",
+            f"Concatenating {len(inputDiaTableRefs)} DIA source tables over {len(day_obsInDia)} day_obs.",
         )
 
         # Concatenate the input DIA tables into a single table without having
         # them all in memory at once.
-        consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs)
+        consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs).to_pandas()
 
-        # A list of dictionaries for each visit.
-        ccdEntries = []
-
-        for visitSummaryRef in inputVisitSummaryRefs:
-            # visitInfo is the same for all elements in visitSummary.
-            visitInfo = visitSummaryRef.get()[0].getVisitInfo()
-
-            # Populate an entry with the visitInfo data.
-            entry = dict(
-                visit=visitInfo.id,  # == 'visit' in consolidatedDiaTable.
-                exposureTime=visitInfo.exposureTime,
-                MJD=visitInfo.date.get(system=DateTime.MJD),
-                boresightRa=visitInfo.boresightRaDec[0].asDegrees(),
-                boresightDec=visitInfo.boresightRaDec[1].asDegrees(),
-                observatory=str(visitInfo.observatory),
-                instrumentLabel=visitInfo.instrumentLabel,
-                observationType=visitInfo.observationType,
-                scienceProgram=visitInfo.scienceProgram,
-                observationReason=visitInfo.observationReason,
-                object=visitInfo.object,
-                hasSimulatedContent=visitInfo.hasSimulatedContent,
-            )
-            ccdEntries.append(entry)
-
-            # We ideally want the observatory code e.g. X05 for LSST, from
-            # visitInfo, but since it's not available there, we retrieve it
-            # from config instead (see below).
-
-        # Make an Astropy table of visitInfo entries.
-        consolidatedVisitInfo = Table(rows=ccdEntries)
-        consolidatedVisitInfo["obsCode"] = self.config.observatoryCode
-        image = (
-            consolidatedVisitInfo[["MJD", "boresightRa", "boresightDec", "obsCode", "exposureTime"]]
-            .to_pandas()
-            .values
+        inputVisitSummaryRefs = inputs["inputVisitSummaries"]
+        inputVisitSummaryRefs.sort(key=lambda x: x.dataId["day_obs"])
+        day_obsInVisit = set(ref.dataId["day_obs"] for ref in inputVisitSummaryRefs)
+        self.log.info(
+            f"Concatenating {len(inputVisitSummaryRefs)} visit summary tables over {len(day_obsInVisit)} day_obs.",
         )
-        obsCodesTextLines = ResourcePath("resource://heliolinx/obsCodes.txt").read().decode().split("\n")
-        obsarr = solardg.parse_ObsCodes(obsCodesTextLines)
-
-        earthpos = df2numpy(
-            inputs["sspEarthState"]
-            .get()
-            .to_pandas()
-            .rename(columns={"X": "x", "Y": "y", "Z": "z", "VX": "vx", "VY": "vy", "VZ": "vz"}),
-            "EarthState",
-        )
-        result = np.array(solardg.image_add_observerpos(image, obsarr, earthpos))
-
-        for col in ["X", "Y", "Z", "VX", "VY", "VZ"]:
-            consolidatedVisitInfo["observer" + col] = result[col]
-
-        # Assign units to relevant columns.
-        consolidatedVisitInfo["exposureTime"].unit = u.second
-        consolidatedVisitInfo["MJD"].unit = u.day
-        consolidatedVisitInfo["boresightRa"].unit = u.deg
-        consolidatedVisitInfo["boresightDec"].unit = u.deg
+        consolidatedVisitTable = TableVStack.vstack_handles(inputVisitSummaryRefs).to_pandas()
 
         butlerQC.put(
-            pipeBase.Struct(outputDiaTable=consolidatedDiaTable, outputVisitInfo=consolidatedVisitInfo),
+            pipeBase.Struct(outputDiaTable=consolidatedDiaTable, outputVisitInfo=consolidatedVisitTable),
             outputRefs,
         )

@@ -83,6 +83,10 @@ class LoadBalanceTask(PipelineTask):
         inputs = butlerQC.get(inputRefs)
         outputs = self.run(**inputs)
         n = len(outputs.sspLoadBalancedLinkageList)
+        print(n, 'loadBalancedLinkageBundles')
+        print(len(outputRefs.sspLoadBalancedLinkages), 'len(outputRefs.sspLoadBalancedLinkages)')
+        print(len(outputs.sspLoadBalancedLinkageList), 'len(outputs.sspLoadBalancedLinkageList)')
+
         for i in range(n):
             dataId = outputRefs.sspLoadBalancedLinkages[i]
             butlerQC.put(outputs.sspLoadBalancedLinkageList[i], dataId)
