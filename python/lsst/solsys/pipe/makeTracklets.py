@@ -166,6 +166,22 @@ class MakeTrackletsConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections
         default=0,
         doc="Offset in seconds to change timescale (TAI to UTC, for example)"
     )
+    trkfrac = Field(
+        dtype=float,
+        default=0.3,
+        doc="Minimum tracklet length in high-depth fields as a factor of depth."
+    )
+    matchrad = Field(
+        dtype=float,
+        default=0.2,
+        doc="Radius of field matching in degrees"
+    )
+    use_lowmem = Field(
+        dtype=bool,
+        default=True,
+        doc="Use the new low-memory makeTracklets algorithm. Config left to allow backwards-compatibility just in case."
+    )
+
 
 class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
     ConfigClass = MakeTrackletsConfig
@@ -180,8 +196,8 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
         # to heliolinc's native config object.
         config = hl.MakeTrackletsConfig()
         configs_to_transfer = ['mintrkpts', 'imagetimetol', 'maxvel', 'minvel', 'exptime', 'minarc',
-                               'maxtime', 'mintime', 'imagerad', 'maxgcr', 'siglenscale', 'sigpascale',
-                               'max_netl', 'verbose']  # should this have time_offset?
+                               'maxtime', 'mintime', 'imagerad', 'matchrad', 'trkfrac', 'maxgcr', 'siglenscale', 'sigpascale',
+                               'max_netl', 'use_lowmem', 'verbose']  # should this have time_offset?
         for config_name in configs_to_transfer:
             setattr(config, config_name, getattr(self.config, config_name))
 
