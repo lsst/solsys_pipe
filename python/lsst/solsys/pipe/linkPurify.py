@@ -86,7 +86,7 @@ class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Li
     )
     max_oop = lsst.pex.config.Field(
         dtype=float,
-        default=1000.0,
+        default=10000.0,
         doc="Maximum scaled out-of-plane RMS in km for a viable linkage"
     )
     rejfrac = lsst.pex.config.Field(
@@ -124,6 +124,12 @@ class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Li
         default=0,
         doc="Prints monitoring output."
     )
+    doLinkPlanarity = lsst.pex.config.Field(
+        dtype=bool,
+        default=True,
+        doc="Whether to use new linkPlanarity method, which approaches full completeness with faster runtime"
+    )
+
 
 class LinkPurifyTask(lsst.pipe.base.PipelineTask):
     ConfigClass = LinkPurifyConfig
@@ -145,14 +151,25 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
         for var in allvars:
             setattr(config, var, getattr(self.config, var))
 
-        (
-            sspPurifiedLinkages, sspPurifiedLinkageSources
-        ) = hl.linkPurify(config,
-                          utils.df2numpy(sspVisitInputs,      "hlimage"),
-                          utils.df2numpy(sspTrackletSources,  "hldet"),
-                          utils.df2numpy(sspBalancedLinkages,         "hlclust"),
-                          utils.df2numpy(sspBalancedLinkageSources,   "longpair"),
-                         )
+        if self.config.doLinkPlanarity:
+            (
+                sspPurifiedLinkages, sspPurifiedLinkageSources
+            ) = hl.linkPlanarity(config,
+                                 utils.df2numpy(sspVisitInputs,      "hlimage"),
+                                 utils.df2numpy(sspTrackletSources,  "hldet"),
+                                 utils.df2numpy(sspBalancedLinkages,         "hlclust"),
+                                 utils.df2numpy(sspBalancedLinkageSources,   "longpair"),
+                                )
+
+        else:
+            (
+                sspPurifiedLinkages, sspPurifiedLinkageSources
+            ) = hl.linkPurify(config,
+                              utils.df2numpy(sspVisitInputs,      "hlimage"),
+                              utils.df2numpy(sspTrackletSources,  "hldet"),
+                              utils.df2numpy(sspBalancedLinkages,         "hlclust"),
+                              utils.df2numpy(sspBalancedLinkageSources,   "longpair"),
+                             )
 
         return lsst.pipe.base.Struct(sspPurifiedLinkages=sspPurifiedLinkages,
                                      sspPurifiedLinkageSources=sspPurifiedLinkageSources
