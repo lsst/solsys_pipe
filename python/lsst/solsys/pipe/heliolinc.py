@@ -35,19 +35,19 @@ class HeliolincConnections(lsst.pipe.base.PipelineTaskConnections,
         doc="sources that got included in tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklet_sources"
+        name="ssp_tracklet_source_dayobs_14"
     )
     sspTracklets = connectionTypes.Input(
         doc="summary data for tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklets"
+        name="ssp_tracklet_dayobs_14"
     )
     sspTrackletToSource = connectionTypes.Input(
         doc="indices connecting tracklets to sspTrackletSources",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklet_to_source"
+        name="ssp_tracklet_to_source_dayobs_14"
     )
     sspHypothesisTable = connectionTypes.PrerequisiteInput(
         doc="hypotheses of asteroids' heliocentric radial motion",
