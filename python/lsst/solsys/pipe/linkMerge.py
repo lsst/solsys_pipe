@@ -150,9 +150,7 @@ class LinkMergeTask(lsst.pipe.base.PipelineTask):
             sspPurifiedLinkageSources[i] = sspLinkageSource
             n += len(sspLinkage)
 
-        print(f'consolidating {n_tables} linkage tables')
         sspPurifiedLinkages = tb.vstack(sspPurifiedLinkages)
-        print(f'consolidating {n_tables} linkage source tables')
         sspPurifiedLinkageSources = tb.vstack(sspPurifiedLinkageSources)
 
         # copy all config parameters from the Task's config object
