@@ -31,7 +31,7 @@ __all__ = [
 
 
 import logging
-
+import warnings
 import lsst.pex.config
 import lsst.pipe.base as pipeBase
 import numpy as np
@@ -45,6 +45,7 @@ from lsst.resources import ResourcePath
 from lsst.solsys.pipe.utils import df2numpy
 
 _LOG = logging.getLogger(__name__)
+warnings.filterwarnings("ignore")
 
 
 class ConsolidateTrackletsConnections(
@@ -56,7 +57,7 @@ class ConsolidateTrackletsConnections(
         "visitSummaryInputName": "visit_summary_dayobs",
         "visitInfoOutputName": "visit_summary_dayobs_14",
     },
-    dimensions=("instrument", "day_obs"),
+    dimensions=("instrument", "day_obs", "ssp_hypothesis_table"),
 ):
     inputVisitSummaries = pipeBase.connectionTypes.Input(
         doc="Per-dayobs consolidated exposure metadata",
@@ -188,6 +189,11 @@ class ConsolidateTrackletsTask(pipeBase.PipelineTask):
         for i in range(n_tables):
             # no need to update inputVisitSummaries[i]
             # update inputTrackletSources[i]
+            print('\n\n\n')
+            print(max(inputTrackletToSource[i]['i1']) + 1, len(inputTracklets[i]))
+            print(max(inputTrackletToSource[i]['i2']) + 1, len(inputTrackletSources[i]))
+            assert max(inputTrackletToSource[i]['i1']) + 1 == len(inputTracklets[i]), "shuffled tables?!"
+            assert max(inputTrackletToSource[i]['i2']) + 1 == len(inputTrackletSources[i]), "shuffled tables?!"
             inputTrackletSources[i]['index'] += n_sources
             inputTrackletSources[i]['image'] += n_visits
             # update inputTracklets[i]
@@ -201,7 +207,6 @@ class ConsolidateTrackletsTask(pipeBase.PipelineTask):
             n_tracklets += len(inputTracklets[i])
             n_sources += len(inputTrackletSources[i])
             n_visits += len(inputVisitSummaries[i])
-            assert len(inputTrackletSources[i]) <= len(inputTrackletToSource[i]), "shuffled tables?!"
         visitSummary = tb.vstack(inputVisitSummaries)
         trackletSources = tb.vstack(inputTrackletSources)
         tracklets = tb.vstack(inputTracklets)
