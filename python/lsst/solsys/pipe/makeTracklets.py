@@ -125,7 +125,8 @@ class MakeTrackletsConnections(
 
 diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'midpointMjdTai': 'MJD',
                              'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA',
-                             'sourceId': 'idstring', 'expTime': 'exptime'}
+                             'sourceId': 'idstring', 'expTime': 'exptime', 'raErr': 'sig_along',
+                             'decErr': 'sig_across'}
 
 class MakeTrackletsConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections
@@ -264,10 +265,35 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
             self.log.info(
                 f"Removing {n_removed} sources with reliability < {self.config.minReliability}. ",
             )
+            consolidatedDiaTable['det_qual'] = consolidatedDiaTable['reliability'] * 1000
         else:
             self.log.info("'reliability' not found in source table columns; not filtering.")
 
-        consolidatedDiaTable = consolidatedDiaTable[['visit', 'MJD', 'RA', 'Dec', 'idstring']]
+        if 'trailFlux' in consolidatedDiaTable.columns:
+            flux = np.where(consolidatedDiaTable['trailFlux'].values, consolidatedDiaTable['psfFlux'].values,
+                            np.isfinite(consolidatedDiaTable['trailFlux']))
+        else:
+            flux = consolidatedDiaTable['psfFlux'].values
+        positive_flux_mask = flux > 0
+        n_removed = len(positive_flux_mask) - np.sum(positive_flux_mask)
+        self.log.info(
+            f"Removing {n_removed} sources with negative flux.",
+        )
+        consolidatedDiaTable = consolidatedDiaTable[positive_flux_mask]
+        flux = flux[positive_flux_mask]
+
+        consolidatedDiaTable['mag'] = (flux*u.nJy).to(u.ABmag)
+
+        if 'sig_across' in consolidatedDiaTable.columns:
+            consolidatedDiaTable['sig_across'] *= 3600
+        if 'sig_along' in consolidatedDiaTable.columns:
+            consolidatedDiaTable['sig_along'] *= 3600
+
+        allSourceColumns = ['MJD', 'RA', 'Dec', 'idstring', 'mag', 'band', 'mag', 'trail_len', 'trail_PA',
+                            'sig_across', 'sig_along', 'det_qual']
+        sourceColumns = sorted(set(allSourceColumns).intersection(set(consolidatedDiaTable.columns)))
+        consolidatedDiaTable = consolidatedDiaTable[['visit'] + sourceColumns]
+        # Plus: trail_len, trail_PA, sigmag, sig_across, sig_along, image, obscode, 
         consolidatedDiaTable['idstring'] = consolidatedDiaTable['idstring'].astype(str)
         consolidatedDiaTable['obscode'] = self.config.observatoryCode
 
@@ -349,7 +375,7 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
         consolidatedVisitInfo["RA"].unit = u.deg
         consolidatedVisitInfo["Dec"].unit = u.deg
 
-        consolidatedDiaTable = consolidatedDiaTable[['MJD', 'RA', 'Dec', 'idstring']]
+        consolidatedDiaTable = consolidatedDiaTable.drop(columns='visit')
         (
             sspTrackletSources, sspTracklets, sspTrackletToSource
         ) = self.run(consolidatedDiaTable, consolidatedVisitInfo)
