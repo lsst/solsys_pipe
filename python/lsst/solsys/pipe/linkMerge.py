@@ -65,12 +65,12 @@ class LinkMergeConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Lin
     )
     ptpow = lsst.pex.config.Field(
         dtype=int,
-        default=1,
+        default=-1,
         doc="Exponent used for number of points in linkage quality metric"
     )
     nightpow = lsst.pex.config.Field(
         dtype=int,
-        default=1,
+        default=-1,
         doc="Exponent used for number of nights in linkage quality metric"
     )
     timepow = lsst.pex.config.Field(
@@ -80,7 +80,7 @@ class LinkMergeConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Lin
     )
     rmspow = lsst.pex.config.Field(
         dtype=int,
-        default=2,
+        default=1,
         doc="Negative of exponent used for astrometric RMS in linkage quality metric"
     )
     maxrms = lsst.pex.config.Field(
@@ -128,6 +128,12 @@ class LinkMergeConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Lin
         default=0,
         doc="Prints monitoring output."
     )
+    ecc_penalty = lsst.pex.config.Field(
+        dtype=float,
+        default=1.5,
+        doc="Penalty factor for high-eccentricity orbits in linkage quality metric"
+    ) 
+
 
 class LinkMergeTask(lsst.pipe.base.PipelineTask):
     ConfigClass = LinkMergeConfig
