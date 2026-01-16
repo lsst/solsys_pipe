@@ -31,6 +31,7 @@ __all__ = [
 
 
 import logging
+from astropy.time import Time
 import warnings
 import lsst.pex.config
 import lsst.pipe.base as pipeBase
@@ -113,6 +114,13 @@ class ConsolidateTrackletsConnections(
         dimensions=("instrument", "day_obs"),
     )
 
+    def dayobs_to_mjd(self, dayobs):
+        dayobs = str(dayobs)
+        y = dayobs[:4]
+        m = dayobs[4:6]
+        d = dayobs[6:8]
+        return int(Time(f'{y}-{m}-{d}').mjd)
+
     def adjust_all_quanta(self, adjuster):
         """This will drop all quanta but the quantum for the latest day_obs
         and add the input data from those quanta to the latest day_obs.
@@ -126,37 +134,59 @@ class ConsolidateTrackletsConnections(
             return
 
         # Dynamically get data_id for the latest day_obs.
-        data_id_latest = max(to_do, key=lambda d: d["day_obs"])
+        day_obs = sorted([data_id['day_obs'] for data_id in to_do])
+        mjds = [self.dayobs_to_mjd(d) for d in day_obs]
+        n = len(mjds)
+        last_window_start = None
+        dayobs_to_dayobs_lists = {}
+        for i in range(n - 1, -1, -1):
+            do = day_obs[i]
+            mjd = mjds[i]
+            window = [do]
+            j = i - 1
+            while j >= 0 and mjd - mjds[j] <= self.config.linkingTimespan:
+                window.append(day_obs[j])
+                j -= 1
+            window = list(reversed(window))
+            if window and window[0] != last_window_start:
+                dayobs_to_dayobs_lists[do] = window
+            last_window_start = window[0]
+        # Loop over all data_id's in the to_do set. Discard day_obs within
+        # the linkingTimespan of the earliest day_obs, and consolidate
+        # input data from the linkingTimespan days before each other day_obs.
+        input_dict = {data_id['day_obs']: adjuster.get_inputs(data_id) for data_id in to_do}
+        # make a dict from data_id to the data_ids within X days before it
 
-        # Loop over all data_id's in the to_do set. We will keep the latest
-        # day_obs and add all the input data from the other day_obs to it.
         for data_id in to_do:
             # data_id has keys: instrument, day_obs.
-            if data_id == data_id_latest:
-                # Skip the latest day_obs. This is the one we want to keep.
+            if data_id['day_obs'] not in dayobs_to_dayobs_lists:
+                adjuster.remove_quantum(data_id)
                 continue
-            inputs = adjuster.get_inputs(data_id)
             # In the three for loops below, we loop over all input refs with
             # the same data_id as the current data_id in the loop and add
             # their input data to the quantum for the latest day_obs.
             input_data_types = ["inputVisitSummaries", "inputTracklets",
                                 "inputTrackletToSource", "inputTrackletSources"]
             for input_data_type in input_data_types:
-                for input_data_id in inputs[input_data_type]:
-                    adjuster.add_input(data_id_latest, input_data_type, input_data_id)
-            adjuster.remove_quantum(data_id)
+                for input_dayobs in dayobs_to_dayobs_lists[data_id['day_obs']]:
+                    input_data_id = input_dict[input_dayobs][input_data_type][0]
+                    adjuster.add_input(data_id, input_data_type, input_data_id)
 
         # Log that the last day_obs is being kept as a reference.
         _LOG.info(
-            f"Combined inputs from {len(to_do)} quanta into one quantum "
-            f"under reference day_obs {data_id_latest['day_obs']}."
+            f"Combined inputs from {len(to_do)} quanta into {len(input_dict)} quanta"
+            f"under following reference day_obs: {sorted(input_dict.keys())}."
         )
 
 
 class ConsolidateTrackletsConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=ConsolidateTrackletsConnections
 ):
-    pass
+    linkingTimespan = lsst.pex.config.Field(
+        dtype=int,
+        default=14,
+        doc="Heliolinc input timespan (days) to consolidate."
+        )
 
 
 class ConsolidateTrackletsTask(pipeBase.PipelineTask):
@@ -189,9 +219,6 @@ class ConsolidateTrackletsTask(pipeBase.PipelineTask):
         for i in range(n_tables):
             # no need to update inputVisitSummaries[i]
             # update inputTrackletSources[i]
-            print('\n\n\n')
-            print(max(inputTrackletToSource[i]['i1']) + 1, len(inputTracklets[i]))
-            print(max(inputTrackletToSource[i]['i2']) + 1, len(inputTrackletSources[i]))
             assert max(inputTrackletToSource[i]['i1']) + 1 == len(inputTracklets[i]), "shuffled tables?!"
             assert max(inputTrackletToSource[i]['i2']) + 1 == len(inputTrackletSources[i]), "shuffled tables?!"
             inputTrackletSources[i]['index'] += n_sources
