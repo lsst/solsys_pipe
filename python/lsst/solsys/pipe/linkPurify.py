@@ -61,13 +61,15 @@ class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Li
     )
     ptpow = lsst.pex.config.Field(
         dtype=int,
-        default=1,
-        doc="Exponent used for number of points in linkage quality metric"
+        default=-1,
+        doc="Exponent used for number of points in linkage quality metric."
+            + "Negative activates product of per-night point counts."
     )
     nightpow = lsst.pex.config.Field(
         dtype=int,
-        default=1,
-        doc="Exponent used for number of nights in linkage quality metric"
+        default=-1,
+        doc="Exponent used for number of nights in linkage quality metric."
+            + "Negative activates product of per-night point counts."
     )
     timepow = lsst.pex.config.Field(
         dtype=int,
@@ -76,7 +78,7 @@ class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Li
     )
     rmspow = lsst.pex.config.Field(
         dtype=int,
-        default=2,
+        default=1,
         doc="Negative of exponent used for astrometric RMS in linkage quality metric"
     )
     maxrms = lsst.pex.config.Field(
@@ -129,6 +131,11 @@ class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Li
         default=True,
         doc="Whether to use new linkPlanarity method, which approaches full completeness with faster runtime"
     )
+    ecc_penalty = lsst.pex.config.Field(
+        dtype=float,
+        default=1.5,
+        doc="Penalty factor for high-eccentricity orbits in linkage quality metric"
+    )
 
 
 class LinkPurifyTask(lsst.pipe.base.PipelineTask):
@@ -150,6 +157,7 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
         allvars = [item for item in dir(hl.LinkPurifyConfig) if not item.startswith("_")]
         for var in allvars:
             setattr(config, var, getattr(self.config, var))
+        print('ecc', self.config.ecc_penalty, config.ecc_penalty)
 
         if self.config.doLinkPlanarity:
             (
