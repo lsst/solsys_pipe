@@ -2,7 +2,7 @@ import heliolinx.heliolinx as hl
 import heliolinx.solarsyst_dyn_geo as sdg
 import lsst.pex.config
 import lsst.pipe.base
-from lsst.pipe.base import connectionTypes
+from lsst.pipe.base import connectionTypes, NoWorkFound
 from . import utils
 import astropy.table as tb
 
@@ -145,8 +145,13 @@ class LinkMergeTask(lsst.pipe.base.PipelineTask):
         """
 
         # consolidate stuff
+        sspPurifiedLinkages = [t for t in sspPurifiedLinkages if len(t) > 0]
+        sspPurifiedLinkageSources = [t for t in sspPurifiedLinkageSources if len(t) > 0]
         n = 0
         n_tables = len(sspPurifiedLinkages)
+        if n_tables == 0:
+            raise NoWorkFound
+
         for i in range(n_tables):
             sspLinkage = sspPurifiedLinkages[i]
             sspLinkage['clusternum'] += n

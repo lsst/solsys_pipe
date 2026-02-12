@@ -24,7 +24,7 @@ __all__ = ("LoadBalanceConfig", "LoadBalanceTask")
 
 import logging
 
-import astropy.table
+import astropy.table as tb
 from lsst.pex.config import Field
 from lsst.pipe.base import (
     NoWorkFound,
@@ -47,6 +47,14 @@ class LoadBalanceConnections(
         storageClass="ArrowAstropy",
         name="ssp_linkages",
         multiple=True,
+        deferLoad=True,
+    )
+    sspLinkageCounts = connectionTypes.Input(
+        doc="Row counts of linkage tables to be load-balanced.",
+        dimensions=["day_obs", "ssp_hypothesis_table", "ssp_hypothesis_bundle"],
+        storageClass="int",
+        name="ssp_linkages.rowcount",
+        multiple=True,
     )
     sspLinkageSourceList = connectionTypes.Input(
         doc="List of linkage source tables corresponding to the linkage tables.",
@@ -54,6 +62,7 @@ class LoadBalanceConnections(
         storageClass="ArrowAstropy",
         name="ssp_linkage_sources",
         multiple=True,
+        deferLoad=True,
     )
     sspLoadBalancedLinkages = connectionTypes.Output(
         doc="List of load-balanced linkage tables.",
@@ -81,66 +90,56 @@ class LoadBalanceTask(PipelineTask):
 
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
-        outputs = self.run(**inputs)
-        n = len(outputs.sspLoadBalancedLinkageList)
 
-        for i in range(n):
-            dataId = outputRefs.sspLoadBalancedLinkages[i]
-            butlerQC.put(outputs.sspLoadBalancedLinkageList[i], dataId)
-            dataId = outputRefs.sspLoadBalancedLinkageSources[i]
-            butlerQC.put(outputs.sspLoadBalancedLinkageSourceList[i], dataId)
+        n_tables = len(inputs["sspLinkageList"])
+        n_ind = self.config.num_linkrefine_indices
+        n_linkages = sum(inputs["sspLinkageCounts"])
+        n_target = int(n_linkages/n_ind) + 1
+        leftoverLinkages, leftoverSources = None, None
+        n_linkages_processed, i_output = 0, 0
 
-    def run(self, sspLinkageList, sspLinkageSourceList):
-        """Load balance the linkage tables across the specified number of
-        indices.
-
-        Parameters
-        ----------
-        sspLinkageList : `list` of `astropy.table.Table`
-            List of linkage tables to be load-balanced.
-        sspLinkageSourceList : `list` of `astropy.table.Table`
-            List of linkage source tables corresponding to the linkage tables.
-
-        Returns
-        -------
-        `Struct`
-            A structure containing two lists:
-            - ``sspLoadBalancedLinkageList``: List of load-balanced linkage
-              tables.
-            - ``sspLoadBalancedLinkageSourceList``: List of load-balanced
-              linkage source tables.
-        """
-        if len(sspLinkageList) == 0:
+        if n_tables == 0 or n_linkages == 0:
             raise NoWorkFound
 
-        n_ind = self.config.num_linkrefine_indices
-        _LOG.info(f"Concatenating {len(sspLinkageList)} linkage tables")
-        n = 0
-        for i in range(len(sspLinkageList)):
-            sspLinkage = sspLinkageList[i]
-            sspLinkage["clusternum"] += n
-            sspLinkageList[i] = sspLinkage
-            sspLinkageSource = sspLinkageSourceList[i]
-            sspLinkageSource["i1"] += n
-            sspLinkageSourceList[i] = sspLinkageSource
-            n += len(sspLinkage)
-        sspLinkage = astropy.table.vstack(sspLinkageList)
-        sspLinkageSource = astropy.table.vstack(sspLinkageSourceList)
-        sspLinkage["loadBalanceIndex"] = sspLinkage["clusternum"] % n_ind
-        sspLinkageSource["loadBalanceIndex"] = sspLinkageSource["i1"] % n_ind
-        sspLoadBalancedLinkageList = [t for t in sspLinkage.group_by("loadBalanceIndex").groups]
-        sspLoadBalancedLinkageSourceList = [t for t in sspLinkageSource.group_by("loadBalanceIndex").groups]
-        for i in range(n_ind):
-            if len(sspLoadBalancedLinkageList) <= i:
-                sspLoadBalancedLinkageList.append(astropy.table.Table())
-                sspLoadBalancedLinkageSourceList.append(astropy.table.Table())
-            else:
-                sspLoadBalancedLinkageList[i]["clusternum"] //= n_ind
-                sspLoadBalancedLinkageSourceList[i]["i1"] //= n_ind
-                sspLoadBalancedLinkageList[i].remove_column("loadBalanceIndex")
-                sspLoadBalancedLinkageSourceList[i].remove_column("loadBalanceIndex")
+        _LOG.info(f'Targeting {n_target}-row outputs ({n_linkages} to be split across {n_ind}')
 
-        return Struct(
-            sspLoadBalancedLinkageList=sspLoadBalancedLinkageList,
-            sspLoadBalancedLinkageSourceList=sspLoadBalancedLinkageSourceList,
-        )
+        for i in range(n_tables):
+            _LOG.info(f"Reading input table {i}")
+            sspLinkage = inputs["sspLinkageList"][i].get()
+            sspLinkage["clusternum"] += n_linkages_processed
+            sspLinkageSource = inputs["sspLinkageSourceList"][i].get()
+            sspLinkageSource["i1"] += n_linkages_processed
+            n_linkages_processed += len(sspLinkage)
+            if leftoverLinkages is None:
+                leftoverLinkages = sspLinkage
+                leftoverSources = sspLinkageSource
+            else:
+                leftoverLinkages = tb.vstack([leftoverLinkages, sspLinkage])
+                leftoverSources = tb.vstack([leftoverSources, sspLinkageSource])
+
+            while len(leftoverLinkages) >= n_target:
+                _LOG.info(f'Current tally {len(leftoverLinkages)} rows')
+                outputLinkages = leftoverLinkages[:n_target]
+                offset_clusternum = outputLinkages['clusternum'][0]
+                cutoff_clusternum = outputLinkages['clusternum'][-1]
+                outputLinkages['clusternum'] -= offset_clusternum
+
+                outputSources = leftoverSources[leftoverSources['i1'] <= cutoff_clusternum]
+                outputSources['i1'] -= offset_clusternum
+
+                leftoverLinkages = leftoverLinkages[n_target:]
+                leftoverSources = leftoverSources[leftoverSources['i1'] > cutoff_clusternum]
+
+                _LOG.info(f"Writing output table {i_output}")
+                linkageRef = outputRefs.sspLoadBalancedLinkages[i_output]
+                butlerQC.put(outputLinkages, linkageRef)
+                sourceRef = outputRefs.sspLoadBalancedLinkageSources[i_output]
+                butlerQC.put(outputSources, sourceRef)
+
+                i_output += 1
+            _LOG.info(f'Current tally {len(leftoverLinkages)} rows')
+        if i_output < n_ind - 1:
+            linkageRef = outputRefs.sspLoadBalancedLinkages[i_output]
+            butlerQC.put(outputLinkages, linkageRef)
+            sourceRef = outputRefs.sspLoadBalancedLinkageSources[i_output]
+            butlerQC.put(outputSources, sourceRef)
