@@ -52,7 +52,7 @@ class LoadBalanceConnections(
     sspLinkageCounts = connectionTypes.Input(
         doc="Row counts of linkage tables to be load-balanced.",
         dimensions=["day_obs", "ssp_hypothesis_table", "ssp_hypothesis_bundle"],
-        storageClass="ArrowAstropy",
+        storageClass="int",
         name="ssp_linkages.rowcount",
         multiple=True,
     )
@@ -91,23 +91,23 @@ class LoadBalanceTask(PipelineTask):
     def runQuantum(self, butlerQC, inputRefs, outputRefs):
         inputs = butlerQC.get(inputRefs)
 
-        n_tables = len(inputs.sspLinkageList)
-        if n_tables == 0:
-            raise NoWorkFound
-
-        _LOG.info(f"Concatenating {n_tables} linkage tables")
-
+        n_tables = len(inputs["sspLinkageList"])
         n_ind = self.config.num_linkrefine_indices
-        n_linkages = sum(inputs.sspLinkageCounts)
+        n_linkages = sum(inputs["sspLinkageCounts"])
         n_target = int(n_linkages/n_ind) + 1
         leftoverLinkages, leftoverSources = None, None
         n_linkages_processed, i_output = 0, 0
 
+        if n_tables == 0 or n_linkages == 0:
+            raise NoWorkFound
+
+        _LOG.info(f'Targeting {n_target}-row outputs ({n_linkages} to be split across {n_ind}')
+
         for i in range(n_tables):
             _LOG.info(f"Reading input table {i}")
-            sspLinkage = inputs.sspLinkageList[i].get()
+            sspLinkage = inputs["sspLinkageList"][i].get()
             sspLinkage["clusternum"] += n_linkages_processed
-            sspLinkageSource = inputs.sspLinkageSourceList[i].get()
+            sspLinkageSource = inputs["sspLinkageSourceList"][i].get()
             sspLinkageSource["i1"] += n_linkages_processed
             n_linkages_processed += len(sspLinkage)
             if leftoverLinkages is None:
@@ -118,21 +118,26 @@ class LoadBalanceTask(PipelineTask):
                 leftoverSources = tb.vstack([leftoverSources, sspLinkageSource])
 
             while len(leftoverLinkages) >= n_target:
-
+                _LOG.info(f'Current tally {len(leftoverLinkages)} rows')
                 outputLinkages = leftoverLinkages[:n_target]
+                offset_clusternum = outputLinkages['clusternum'][0]
                 cutoff_clusternum = outputLinkages['clusternum'][-1]
+                outputLinkages['clusternum'] -= offset_clusternum
+
                 outputSources = leftoverSources[leftoverSources['i1'] <= cutoff_clusternum]
+                outputSources['i1'] -= offset_clusternum
 
                 leftoverLinkages = leftoverLinkages[n_target:]
                 leftoverSources = leftoverSources[leftoverSources['i1'] > cutoff_clusternum]
 
-                _LOG.info(f"Writing output tables {i_output}")
+                _LOG.info(f"Writing output table {i_output}")
                 linkageRef = outputRefs.sspLoadBalancedLinkages[i_output]
                 butlerQC.put(outputLinkages, linkageRef)
                 sourceRef = outputRefs.sspLoadBalancedLinkageSources[i_output]
                 butlerQC.put(outputSources, sourceRef)
 
                 i_output += 1
+            _LOG.info(f'Current tally {len(leftoverLinkages)} rows')
         if i_output < n_ind - 1:
             linkageRef = outputRefs.sspLoadBalancedLinkages[i_output]
             butlerQC.put(outputLinkages, linkageRef)
