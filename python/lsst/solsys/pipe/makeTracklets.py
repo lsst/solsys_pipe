@@ -179,10 +179,30 @@ class MakeTrackletsTask(lsst.pipe.base.PipelineTask):
     _DefaultName = "makeTracklets"
 
     def run(self, sspDiaSourceInputs, sspVisitInputs):
-        """doc string
-           here
-        """
+        """Create tracklets of DiaSources
 
+        Parameters
+        ----------
+        sspDiaSourceInputs : `astropy.table.Table`
+            Consolidated DiaSources.
+        sspVisitInputs : `astropy.table.Table`
+            Consolidated visit_summary or similar.  
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct with components.
+
+            - ``sspTrackletSources`` :  Subset of sspDiaSourceInputs included in 
+            tracklets (`astropy.table.Table`)
+            - ``sspTracklets`` : Indices of  (`astropy.table.Table`)
+            - ``sspTrackletToSource`` : (`astropy.table.Table`)
+
+        Raises
+        ------
+        RuntimeError
+            Raised if duplicate DiaObjects or duplicate DiaSources are found.
+        """
         # copy all config parameters from the Task's config object
         # to heliolinc's native config object.
         config = hl.MakeTrackletsConfig()

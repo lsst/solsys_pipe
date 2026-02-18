@@ -165,8 +165,40 @@ class HeliolincTask(lsst.pipe.base.PipelineTask):
         butlerQC.put(outputs, outputRefs)
 
     def run(self, sspVisitInputs, sspTrackletSources, sspTracklets, sspTrackletToSource, sspHypothesisTable, sspEarthState, ssp_hypothesis_bundle):
-        """doc string 
-           here
+        """Propagate tracklets according to a hypothesized (r, r', r'')
+        and produce preliminary linkages.
+        
+        Parameters
+        ----------
+        sspVisitInputs: `astropy.table.Table`
+            Consolidated visitSummary tables including per-visit information (MJD, radec, observer position, ...).
+
+        sspTrackletSources: `astropy.table.Table`
+            Data for the diaSources contained in tracklets. 
+
+        sspTracklets: `astropy.table.Table`
+            Per-tracklet metadata from makeTracklets.
+
+        sspTrackletToSource: `astropy.table.Table`
+            Map from tracklets to trackletSources.
+        
+        sspHypothesisTable: `astropy.table.Table`
+            Hypothesis table from which to draw (r, r', r'') guesses.
+        
+        sspEarthState: `astropy.table.Table`
+            Earth position over time.
+            
+        ssp_hypothesis_bundle: `int`
+            Integer index for bundle of hypotheses from sspHypothesisTable to test.
+
+        Returns
+        -------
+        results : `lsst.pipe.base.Struct`
+            Results struct with components.
+            
+            - sspLinkage: Table of linkages (`astropy.table.Table`)
+        
+            - sspLinkageSources: Sources contained in the above linakges. (`astropy.table.Table`)
         """
 
         # copy all config parameters from the Task's config object
@@ -191,9 +223,6 @@ class HeliolincTask(lsst.pipe.base.PipelineTask):
             ['MJD', 'RA', 'Dec', 'obscode', 'X', 'Y', 'Z', 
               'VX', 'VY', 'VZ', 'startind', 'endind', 'exptime']
         )
-        # sspTrackletSources is all good :) 
-        # ssptracklets is all good :) 
-        # sspTrackletToSource is good :)
         sspHypothesisTable = sspHypothesisTable[sspHypothesisTable['bundle_id'] == ssp_hypothesis_bundle]
         sspHypothesisTable = sspHypothesisTable[['#r(AU)', 'rdot(AU/day)', 'mean_accel']]
         sspHypothesisTable.rename_columns(['#r(AU)', 'rdot(AU/day)', 'mean_accel'],
@@ -204,8 +233,6 @@ class HeliolincTask(lsst.pipe.base.PipelineTask):
         sspEarthState.rename_columns(['X', 'Y', 'Z', 'VX', 'VY', 'VZ'],
                                      ['x', 'y', 'z', 'vx', 'vy', 'vz'])
 
-        print(sspVisitInputs)
-        print(sspTrackletSources)
         (sspLinkage, sspLinkageSources) = hl.heliolinc(config,
                                                        utils.df2numpy(sspVisitInputs,      "hlimage"),
                                                        utils.df2numpy(sspTrackletSources,  "hldet"),

@@ -143,7 +143,9 @@ class ConsolidateSspTablesConfig(
 
 
 class ConsolidateSspTablesTask(pipeBase.PipelineTask):
-    """Concatenate `sourceTable` list into a per-dayobs `sourceTable_dayobs`"""
+    """Consolidate solar system inputs from per-visit to per-X-dayobs. 
+    Concatenates per-visit dia_source and visit_summary refs.
+    """
 
     ConfigClass = ConsolidateSspTablesConfig
     _DefaultName = "consolidateSspTables"
