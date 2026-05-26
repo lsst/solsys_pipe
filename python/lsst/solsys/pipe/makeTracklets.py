@@ -100,13 +100,13 @@ class MakeTrackletsConnections(
         doc="sources that got included in tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklet_sources_dayobs"
+        name="ssp_tracklet_source_dayobs"
     )
     sspTracklets = pipeBase.connectionTypes.Output(
         doc="summary data for tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklets_dayobs"
+        name="ssp_tracklet_dayobs"
     )
     sspTrackletToSource = pipeBase.connectionTypes.Output(
         doc="indices connecting tracklets to sspTrackletSources",

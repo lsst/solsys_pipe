@@ -21,7 +21,7 @@ class LinkPurifyConnections(lsst.pipe.base.PipelineTaskConnections,
         doc="sources that got included in tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklet_sources"
+        name="ssp_tracklet_source_dayobs_14"
     )
     sspBalancedLinkages = connectionTypes.Input(
         doc="one line summary of each linkage",
@@ -157,26 +157,25 @@ class LinkPurifyTask(lsst.pipe.base.PipelineTask):
         allvars = [item for item in dir(hl.LinkPurifyConfig) if not item.startswith("_")]
         for var in allvars:
             setattr(config, var, getattr(self.config, var))
-        print('ecc', self.config.ecc_penalty, config.ecc_penalty)
 
         if self.config.doLinkPlanarity:
             (
                 sspPurifiedLinkages, sspPurifiedLinkageSources
             ) = hl.linkPlanarity(config,
-                                 utils.df2numpy(sspVisitInputs,      "hlimage"),
-                                 utils.df2numpy(sspTrackletSources,  "hldet"),
-                                 utils.df2numpy(sspBalancedLinkages,         "hlclust"),
-                                 utils.df2numpy(sspBalancedLinkageSources,   "longpair"),
+                                 utils.table_to_heliolinx(sspVisitInputs,      "hlimage"),
+                                 utils.table_to_heliolinx(sspTrackletSources,  "hldet"),
+                                 utils.table_to_heliolinx(sspBalancedLinkages,         "hlclust"),
+                                 utils.table_to_heliolinx(sspBalancedLinkageSources,   "longpair"),
                                 )
 
         else:
             (
                 sspPurifiedLinkages, sspPurifiedLinkageSources
             ) = hl.linkPurify(config,
-                              utils.df2numpy(sspVisitInputs,      "hlimage"),
-                              utils.df2numpy(sspTrackletSources,  "hldet"),
-                              utils.df2numpy(sspBalancedLinkages,         "hlclust"),
-                              utils.df2numpy(sspBalancedLinkageSources,   "longpair"),
+                              utils.table_to_heliolinx(sspVisitInputs,      "hlimage"),
+                              utils.table_to_heliolinx(sspTrackletSources,  "hldet"),
+                              utils.table_to_heliolinx(sspBalancedLinkages,         "hlclust"),
+                              utils.table_to_heliolinx(sspBalancedLinkageSources,   "longpair"),
                              )
 
         return lsst.pipe.base.Struct(sspPurifiedLinkages=sspPurifiedLinkages,

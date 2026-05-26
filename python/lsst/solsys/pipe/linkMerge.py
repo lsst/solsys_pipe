@@ -22,7 +22,7 @@ class LinkMergeConnections(lsst.pipe.base.PipelineTaskConnections,
         doc="sources that got included in tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklet_sources"
+        name="ssp_tracklet_source_dayobs_14"
     )
     sspPurifiedLinkages = connectionTypes.Input(
         doc="one line summary of each linkage",
@@ -174,10 +174,10 @@ class LinkMergeTask(lsst.pipe.base.PipelineTask):
         (
             sspMergedLinkages, sspMergedLinkageSourceIndices
         ) = hl.linkPurify(config,
-                          utils.df2numpy(sspVisitInputs,      "hlimage"),
-                          utils.df2numpy(sspTrackletSources,  "hldet"),
-                          utils.df2numpy(sspPurifiedLinkages,         "hlclust"),
-                          utils.df2numpy(sspPurifiedLinkageSources,   "longpair"),
+                          utils.table_to_heliolinx(sspVisitInputs,      "hlimage"),
+                          utils.table_to_heliolinx(sspTrackletSources,  "hldet"),
+                          utils.table_to_heliolinx(sspPurifiedLinkages,         "hlclust"),
+                          utils.table_to_heliolinx(sspPurifiedLinkageSources,   "longpair"),
                          )
 
         sspMergedLinkageSources = sspTrackletSources[sspMergedLinkageSourceIndices['i2']]
