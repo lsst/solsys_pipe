@@ -36,14 +36,12 @@ import warnings
 import lsst.pex.config
 import lsst.pipe.base as pipeBase
 import numpy as np
-from . import utils
 from astropy import units as u
 import astropy.table as tb
 from heliolinx import solarsyst_dyn_geo as solardg
 from lsst.daf.base import DateTime
 from lsst.pipe.tasks.postprocess import TableVStack
 from lsst.resources import ResourcePath
-from lsst.solsys.pipe.utils import df2numpy
 
 _LOG = logging.getLogger(__name__)
 warnings.filterwarnings("ignore")
@@ -110,7 +108,7 @@ class ConsolidateTrackletsConnections(
         doc="Concatenated visit summary from all day_obs in the input with day_obs"
         "dimension of the latest day_obs in the input.",
         name="visit_summary_dayobs_14",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "day_obs"),
     )
 
