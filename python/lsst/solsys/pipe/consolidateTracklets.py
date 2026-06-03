@@ -173,8 +173,10 @@ class ConsolidateTrackletsConnections(
                 for input_dayobs in dayobs_to_dayobs_lists[data_id['day_obs']]:
                     # adjuster.get_inputs returns a list of dataIds. We expect
                     # just one dataId per day_obs here, so we just take [0].
-                    input_data_id = input_dict[input_dayobs][input_data_type][0]
-                    adjuster.add_input(data_id, input_data_type, input_data_id)
+                    # Check if this is empty (discovered in --skip-existing-in)
+                    if len(input_dict[input_dayobs][input_data_type]) > 0:
+                        input_data_id = input_dict[input_dayobs][input_data_type][0]
+                        adjuster.add_input(data_id, input_data_type, input_data_id)
 
         # Log that the last day_obs is being kept as a reference.
         _LOG.info(
