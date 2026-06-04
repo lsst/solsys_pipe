@@ -122,7 +122,8 @@ class MakeTrackletsConnections(
             self.inputs.remove("inputVisitSummaries")
 
 
-# FIXME? This maps both diaSourceId -> idstring AND sourceId -> idstring.
+# Input catalogs carry exactly one of diaSourceId/sourceId; whichever is present
+# is renamed to idstring (rename_table_columns raises if both are present).
 diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'midpointMjdTai': 'MJD',
                              'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA',
                              'sourceId': 'idstring', 'expTime': 'exptime', 'raErr': 'sig_along',

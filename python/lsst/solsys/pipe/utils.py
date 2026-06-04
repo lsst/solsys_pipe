@@ -7,10 +7,11 @@ import numpy as np
 def rename_table_columns(table, column_map):
     """Rename the columns that exist; quietly skip the rest.
 
-    Astropy's ``rename_columns`` is strict — it raises when a name in the
-    map isn't on the table. The upstream DIA schemas come and go a bit
-    (trail columns are optional, for example), so we want the same
-    forgiving behavior ``DataFrame.rename(columns=)`` used to give us.
+    Astropy's ``rename_columns`` raises if a name in the map isn't on the
+    table. This helper instead drops the missing names and renames the rest.
+    We stay schema-forgiving because for now one rename map covers both the
+    transient and DIA catalog schemas, and any given input only has some of
+    those columns. That's safe because heliolinc can run on whatever survives.
 
     Parameters
     ----------
@@ -19,9 +20,28 @@ def rename_table_columns(table, column_map):
     column_map : `dict` [`str`, `str`]
         Maps old column name to new column name. Missing or identity
         entries are dropped silently.
+
+    Raises
+    ------
+    ValueError
+        If more than one column present on the table maps to the same new
+        name, which would silently create duplicate columns.
     """
     renames = [(old, new) for old, new in column_map.items()
                if old != new and old in table.colnames]
+    new_names = [new for _, new in renames]
+    collisions = sorted({new for new in new_names if new_names.count(new) > 1})
+    if collisions:
+        offenders = {new: [old for old, mapped in renames if mapped == new]
+                     for new in collisions}
+        detail = "; ".join(
+            f"{', '.join(old_cols)} would be renamed to '{new}'"
+            for new, old_cols in offenders.items()
+        )
+        raise ValueError(
+            f"Renaming would produce duplicate columns: {detail}. "
+            f"The input should contain only one of them."
+        )
     if renames:
         table.rename_columns(*zip(*renames))
 
