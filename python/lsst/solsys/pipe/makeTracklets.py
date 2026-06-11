@@ -44,7 +44,6 @@ from heliolinx import solarsyst_dyn_geo as solardg
 from lsst.daf.base import DateTime
 from lsst.pipe.tasks.postprocess import TableVStack
 from lsst.resources import ResourcePath
-from lsst.solsys.pipe.utils import df2numpy
 
 _LOG = logging.getLogger(__name__)
 
@@ -88,26 +87,26 @@ class MakeTrackletsConnections(
     outputDiaTable = pipeBase.connectionTypes.Output(
         doc="Concatenated Source Table from one day_obs.",
         name="{diaSourceOutputName}",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "day_obs"),
     )
     outputVisitInfo = pipeBase.connectionTypes.Output(
         doc="Concatenated Visit Summary from one day_obs.",
         name="{visitInfoOutputName}",
-        storageClass="DataFrame",
+        storageClass="ArrowAstropy",
         dimensions=("instrument", "day_obs"),
     )
     sspTrackletSources = pipeBase.connectionTypes.Output(
         doc="sources that got included in tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklet_sources_dayobs"
+        name="ssp_tracklet_source_dayobs"
     )
     sspTracklets = pipeBase.connectionTypes.Output(
         doc="summary data for tracklets",
         dimensions=["instrument", "day_obs", "ssp_hypothesis_table"],
         storageClass="ArrowAstropy",
-        name="ssp_tracklets_dayobs"
+        name="ssp_tracklet_dayobs"
     )
     sspTrackletToSource = pipeBase.connectionTypes.Output(
         doc="indices connecting tracklets to sspTrackletSources",
@@ -123,6 +122,8 @@ class MakeTrackletsConnections(
             self.inputs.remove("inputVisitSummaries")
 
 
+# Input catalogs carry exactly one of diaSourceId/sourceId; whichever is present
+# is renamed to idstring (rename_table_columns raises if both are present).
 diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'midpointMjdTai': 'MJD',
                              'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA',
                              'sourceId': 'idstring', 'expTime': 'exptime', 'raErr': 'sig_along',
@@ -256,9 +257,9 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
 
         # Concatenate the input DIA tables into a single table without having
         # them all in memory at once.
-        consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs).to_pandas()
-        consolidatedDiaTable = consolidatedDiaTable.rename(columns=diaSourceColumnRenameDict)
-        if 'reliability' in consolidatedDiaTable.columns:
+        consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs)
+        utils.rename_table_columns(consolidatedDiaTable, diaSourceColumnRenameDict)
+        if 'reliability' in consolidatedDiaTable.colnames:
             reliabilityMask = consolidatedDiaTable['reliability'] >= self.config.minReliability
             consolidatedDiaTable = consolidatedDiaTable[reliabilityMask]
             n_removed = len(reliabilityMask) - np.sum(reliabilityMask)
@@ -269,11 +270,14 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
         else:
             self.log.info("'reliability' not found in source table columns; not filtering.")
 
-        if 'trailFlux' in consolidatedDiaTable.columns:
-            flux = np.where(consolidatedDiaTable['trailFlux'].values, consolidatedDiaTable['psfFlux'].values,
-                            np.isfinite(consolidatedDiaTable['trailFlux']))
+        if 'trailFlux' in consolidatedDiaTable.colnames:
+            # Use the trailed-source flux when the fit produced a finite
+            # value; fall back to psfFlux where the trail fit gave NaN.
+            trailFlux = np.asarray(consolidatedDiaTable['trailFlux'])
+            psfFlux = np.asarray(consolidatedDiaTable['psfFlux'])
+            flux = np.where(np.isfinite(trailFlux), trailFlux, psfFlux)
         else:
-            flux = consolidatedDiaTable['psfFlux'].values
+            flux = np.asarray(consolidatedDiaTable['psfFlux'])
         positive_flux_mask = flux > 0
         n_removed = len(positive_flux_mask) - np.sum(positive_flux_mask)
         self.log.info(
@@ -282,16 +286,16 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
         consolidatedDiaTable = consolidatedDiaTable[positive_flux_mask]
         flux = flux[positive_flux_mask]
 
-        consolidatedDiaTable['mag'] = (flux*u.nJy).to(u.ABmag)
+        consolidatedDiaTable['mag'] = (flux*u.nJy).to_value(u.ABmag)
 
-        if 'sig_across' in consolidatedDiaTable.columns:
+        if 'sig_across' in consolidatedDiaTable.colnames:
             consolidatedDiaTable['sig_across'] *= 3600
-        if 'sig_along' in consolidatedDiaTable.columns:
+        if 'sig_along' in consolidatedDiaTable.colnames:
             consolidatedDiaTable['sig_along'] *= 3600
 
         allSourceColumns = ['MJD', 'RA', 'Dec', 'idstring', 'mag', 'band', 'mag', 'trail_len', 'trail_PA',
                             'sig_across', 'sig_along', 'det_qual']
-        sourceColumns = sorted(set(allSourceColumns).intersection(set(consolidatedDiaTable.columns)))
+        sourceColumns = sorted(set(allSourceColumns).intersection(set(consolidatedDiaTable.colnames)))
         consolidatedDiaTable = consolidatedDiaTable[['visit'] + sourceColumns]
         # Plus: trail_len, trail_PA, sigmag, sig_across, sig_along, image, obscode, 
         consolidatedDiaTable['idstring'] = consolidatedDiaTable['idstring'].astype(str)
@@ -299,13 +303,12 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
 
         obsCodesTextLines = ResourcePath("resource://heliolinx/obsCodes.txt").read().decode().split("\n")
         obsarr = solardg.parse_ObsCodes(obsCodesTextLines)
-        earthpos = df2numpy(
-            inputs["sspEarthState"]
-            .get()
-            .to_pandas()
-            .rename(columns={"X": "x", "Y": "y", "Z": "z", "VX": "vx", "VY": "vy", "VZ": "vz"}),
-            "EarthState",
+        earthState = inputs["sspEarthState"].get().copy(copy_data=False)
+        utils.rename_table_columns(
+            earthState,
+            {"X": "x", "Y": "y", "Z": "z", "VX": "vx", "VY": "vy", "VZ": "vz"},
         )
+        earthpos = utils.table_to_heliolinx(earthState, "EarthState")
         if self.config.consolidateVisitTables:
             inputVisitSummaryRefs = inputs["inputVisitSummaries"]
             inputVisitSummaryRefs.sort(key=lambda x: x.dataId["visit"])
@@ -348,24 +351,21 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
             # Make an Astropy table of visitInfo entries.
             consolidatedVisitInfo = Table(rows=ccdEntries)
             consolidatedVisitInfo["obsCode"] = self.config.observatoryCode
-            image = (
-                consolidatedVisitInfo[["MJD", "boresightRa", "boresightDec", "obsCode", "exposureTime"]]
-                .to_pandas()
-                .values
+            image = utils.table_columns_to_object_array(
+                consolidatedVisitInfo,
+                ["MJD", "boresightRa", "boresightDec", "obsCode", "exposureTime"],
             )
             newimage = np.array(solardg.image_add_observerpos(image, obsarr, earthpos))
 
         else:
-            def center(numbers):
-                return (np.min(numbers) + np.max(numbers))/2
-            groupby = consolidatedDiaTable[['visit', 'MJD', 'RA', 'Dec']].groupby('visit')
-            mjd, ra, dec = groupby.aggregate(center).values.T
-            mjd = mjd.astype(str).astype(float)
-            ra = ra.astype(str).astype(float)
-            dec = dec.astype(str).astype(float)
+            mjd, ra, dec = utils.grouped_range_midpoints(
+                consolidatedDiaTable,
+                "visit",
+                ("MJD", "RA", "Dec"),
+            )
             obscode = np.repeat(self.config.observatoryCode, len(dec))
             expTime = np.repeat(30.0, len(dec))  # TODO: Make exact.
-            image = np.array([mjd, ra, dec, obscode, expTime]).T
+            image = np.column_stack([mjd, ra, dec, obscode, expTime])
             newimage = solardg.image_add_observerpos(image, obsarr, earthpos)
         consolidatedVisitInfo = Table(newimage, names=['MJD', 'RA', 'Dec', 'obscode', 'X', 'Y', 'Z', 
                                                        'VX', 'VY', 'VZ', 'startind', 'endind', 'exptime'])
@@ -375,7 +375,7 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
         consolidatedVisitInfo["RA"].unit = u.deg
         consolidatedVisitInfo["Dec"].unit = u.deg
 
-        consolidatedDiaTable = consolidatedDiaTable.drop(columns='visit')
+        consolidatedDiaTable.remove_column('visit')
         (
             sspTrackletSources, sspTracklets, sspTrackletToSource
         ) = self.run(consolidatedDiaTable, consolidatedVisitInfo)

@@ -12,7 +12,7 @@ from . import utils
 # This task searches tracklets for objects findable by a given bundle of hypothesis.
 #
 # The ssp_hypothesis_bundle ID is resolved to the actual hypotheses (the vector of numbers) by
-# extracting the rows with the same ssp_hypothesis_bundle from a DataFrame stored as
+# extracting the rows with the same ssp_hypothesis_bundle from a table stored as
 # sspHypothesisDefinitions data type in the input collection.
 #
 
@@ -189,12 +189,12 @@ class HeliolincTask(lsst.pipe.base.PipelineTask):
                                      ['x', 'y', 'z', 'vx', 'vy', 'vz'])
 
         (sspLinkage, sspLinkageSources) = hl.heliolinc(config,
-                                                       utils.df2numpy(sspVisitInputs,      "hlimage"),
-                                                       utils.df2numpy(sspTrackletSources,  "hldet"),
-                                                       utils.df2numpy(sspTracklets,        "tracklet"),
-                                                       utils.df2numpy(sspTrackletToSource, "longpair"),
-                                                       utils.df2numpy(sspHypothesisTable,  "hlradhyp"),
-                                                       utils.df2numpy(sspEarthState,       "EarthState")
+                                                       utils.table_to_heliolinx(sspVisitInputs,      "hlimage"),
+                                                       utils.table_to_heliolinx(sspTrackletSources,  "hldet"),
+                                                       utils.table_to_heliolinx(sspTracklets,        "tracklet"),
+                                                       utils.table_to_heliolinx(sspTrackletToSource, "longpair"),
+                                                       utils.table_to_heliolinx(sspHypothesisTable,  "hlradhyp"),
+                                                       utils.table_to_heliolinx(sspEarthState,       "EarthState")
                                                       )
 
         return lsst.pipe.base.Struct(sspLinkage=sspLinkage,
