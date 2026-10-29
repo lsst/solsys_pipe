@@ -223,8 +223,16 @@ class ConsolidateTrackletsTask(pipeBase.PipelineTask):
         for i in range(n_tables):
             # no need to update inputVisitSummaries[i]
             # update inputTrackletSources[i]
-            assert max(inputTrackletToSource[i]['i1']) + 1 == len(inputTracklets[i]), "shuffled tables?!"
-            assert max(inputTrackletToSource[i]['i2']) + 1 == len(inputTrackletSources[i]), "shuffled tables?!"
+            if len(inputTrackletToSource[i]) == 0:
+                if len(inputTracklets[i]) or len(inputTrackletSources[i]):
+                    raise RuntimeError(f"Input {i}: tracklets/sources present but tracklet_to_source empty")
+            else:
+                if max(inputTrackletToSource[i]['i1']) + 1 != len(inputTracklets[i]):
+                    raise RuntimeError(f"Input {i}: tracklet_to_source i1 inconsistent with tracklets "
+                                       "(shuffled tables?)")
+                if max(inputTrackletToSource[i]['i2']) + 1 != len(inputTrackletSources[i]):
+                    raise RuntimeError(f"Input {i}: tracklet_to_source i2 inconsistent with sources "
+                                       "(shuffled tables?)")
             inputTrackletSources[i]['index'] += n_sources
             inputTrackletSources[i]['image'] += n_visits
             # update inputTracklets[i]
