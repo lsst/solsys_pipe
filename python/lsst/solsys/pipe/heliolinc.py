@@ -90,10 +90,10 @@ class HeliolincConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Hel
         default=0.5,
         doc="Geocentric distance (AU), within which the clustering."
         )
-    dbscan_npt = lsst.pex.config.Field(
+    cluster_minpts = lsst.pex.config.Field(
         dtype=int,
         default=3,
-        doc="Number of points npt for the DBSCAN algorithm"
+        doc="Minimum number of tracklets for a cluster"
         )
     minobsnights = lsst.pex.config.Field(
         dtype=int,
@@ -153,6 +153,57 @@ class HeliolincConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Hel
         default=0,
         doc="Prints monitoring output."
         )
+    min_obstanvel = lsst.pex.config.Field(
+        dtype=float,
+        default=-1.0,
+        doc="Minimum tangential velocity w.r.t. observer, in km/s. Negative value skips tanvel cut."
+        )
+    use_dbscan = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Use DBscan for state vector clustering"
+        )
+    use_rr = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Use r1-r2 clustering for linkages"
+        )
+    use_taylor = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Use Taylor series interpretation of hypotheses instead of Keplerian"
+        )
+    use_smallclust = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Use memory-efficient storage of clusters"
+        )
+    use_smalltrk = lsst.pex.config.Field(
+        dtype=int,
+        default=1,
+        doc="Use memory-efficient storage of tracklets. Currently always on."
+        )
+    use_streaming = lsst.pex.config.Field(
+        dtype=int,
+        default=0,
+        doc="Ryder's streaming code. Only relevant for multithreaded version, currently not supported in python."
+        )
+    tanveltol = lsst.pex.config.Field(
+        dtype=float,
+        default=-1.0,
+        doc="Tangential velocity tolerance for SAD tracklet rejection, in km/s. Negative value skips cut. "
+        )    
+    veltol_changerad = lsst.pex.config.Field(
+        dtype=float,
+        default=0.01,
+        doc="Minimum distance in AU for distance scalling of tanveltol"
+        )
+    nightstep = lsst.pex.config.Field(
+        dtype=float,
+        default=0.6,
+        doc="Timespan required between tracklets to count as 'nights'"
+        )
+
 
 class HeliolincTask(lsst.pipe.base.PipelineTask):
     ConfigClass = HeliolincConfig

@@ -132,7 +132,12 @@ class LinkMergeConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Lin
         dtype=float,
         default=1.5,
         doc="Penalty factor for high-eccentricity orbits in linkage quality metric"
-    ) 
+    )
+    maxpointnum = lsst.pex.config.Field(
+        dtype=int,
+        default=1000,
+        doc="Maximum number of individual detections for a valid linkage"
+    )
 
 
 class LinkMergeTask(lsst.pipe.base.PipelineTask):

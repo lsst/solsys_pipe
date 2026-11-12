@@ -126,8 +126,7 @@ class MakeTrackletsConnections(
 # is renamed to idstring (rename_table_columns raises if both are present).
 diaSourceColumnRenameDict = {'diaSourceId': 'idstring', 'midpointMjdTai': 'MJD',
                              'ra': 'RA', 'dec': 'Dec', 'trailLength': 'trail_len', 'trailAngle': 'trail_PA',
-                             'sourceId': 'idstring', 'expTime': 'exptime', 'raErr': 'sig_along',
-                             'decErr': 'sig_across'}
+                             'sourceId': 'idstring', 'expTime': 'exptime', 'raErr': 'sig_RA', 'decErr': 'sig_Dec', 'ra_dec_Cov': 'radec_covar'}
 
 class MakeTrackletsConfig(
     pipeBase.PipelineTaskConfig, pipelineConnections=MakeTrackletsConnections
@@ -258,7 +257,9 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
         # Concatenate the input DIA tables into a single table without having
         # them all in memory at once.
         consolidatedDiaTable = TableVStack.vstack_handles(inputDiaTableRefs)
+        print('pre rename columns', 'ra_dec_Cov' in consolidatedDiaTable.columns)
         utils.rename_table_columns(consolidatedDiaTable, diaSourceColumnRenameDict)
+        print('post rename columns', 'radec_covar' in consolidatedDiaTable.columns)
         if 'reliability' in consolidatedDiaTable.colnames:
             reliabilityMask = consolidatedDiaTable['reliability'] >= self.config.minReliability
             consolidatedDiaTable = consolidatedDiaTable[reliabilityMask]
@@ -289,15 +290,18 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
         consolidatedDiaTable['mag'] = (flux*u.nJy).to_value(u.ABmag)
 
         if 'sig_across' in consolidatedDiaTable.colnames:
-            consolidatedDiaTable['sig_across'] *= 3600
+            consolidatedDiaTable['sig_RA'] *= 3600
         if 'sig_along' in consolidatedDiaTable.colnames:
-            consolidatedDiaTable['sig_along'] *= 3600
+            consolidatedDiaTable['sig_Dec'] *= 3600
 
         allSourceColumns = ['MJD', 'RA', 'Dec', 'idstring', 'mag', 'band', 'mag', 'trail_len', 'trail_PA',
-                            'sig_across', 'sig_along', 'det_qual']
+                            'sig_across', 'sig_along', 'sig_RA', 'sig_Dec', 'radec_covar', 'det_qual']
         sourceColumns = sorted(set(allSourceColumns).intersection(set(consolidatedDiaTable.colnames)))
+        print('radec_covar' in allSourceColumns, 'radec_covar' in consolidatedDiaTable.colnames, 'radec_covar' in sourceColumns) 
+        consolidatedDiaTable['sig_across'] = 1  # When this code is adapted for makeTrailedTracklets, modify this.
+        consolidatedDiaTable['sig_along'] = 1
         consolidatedDiaTable = consolidatedDiaTable[['visit'] + sourceColumns]
-        # Plus: trail_len, trail_PA, sigmag, sig_across, sig_along, image, obscode, 
+        # Plus: trail_len, trail_PA, sigmag, image, obscode, 
         consolidatedDiaTable['idstring'] = consolidatedDiaTable['idstring'].astype(str)
         consolidatedDiaTable['obscode'] = self.config.observatoryCode
 
@@ -376,6 +380,7 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
         consolidatedVisitInfo["Dec"].unit = u.deg
 
         consolidatedDiaTable.remove_column('visit')
+        print('radec_covar' in consolidatedDiaTable.colnames, 'J')
         (
             sspTrackletSources, sspTracklets, sspTrackletToSource
         ) = self.run(consolidatedDiaTable, consolidatedVisitInfo)
@@ -400,7 +405,7 @@ class MakeTrackletsTask(pipeBase.PipelineTask):
                                'max_netl', 'use_lowmem', 'verbose']  # should this have time_offset?
         for config_name in configs_to_transfer:
             setattr(config, config_name, getattr(self.config, config_name))
-
+        print('radec_covar' in inputDiaTables.colnames, '#-1')
         hldet = utils.make_hldet(inputDiaTables)
 
         (dets, tracklets, trac2det) = hl.makeTracklets(config,

@@ -132,7 +132,7 @@ def table_to_heliolinx(table, dtypename):
         Structured array of length ``len(table)``.
     """
     sa = getattr(hl, f"create_{dtypename}")(len(table))
-    for name in table.colnames:
+    for name in table.columns:
         sa[name] = np.asarray(table[name])
     return sa
 

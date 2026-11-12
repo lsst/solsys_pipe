@@ -136,7 +136,21 @@ class LinkPurifyConfig(lsst.pipe.base.PipelineTaskConfig, pipelineConnections=Li
         default=1.5,
         doc="Penalty factor for high-eccentricity orbits in linkage quality metric"
     )
-
+    nightstep = lsst.pex.config.Field(
+        dtype=float,
+        default=0.6,
+        doc="Minimum time separation which distinguishes between tracklets"
+    )
+    nightstep = lsst.pex.config.Field(
+        dtype=float,
+        default=0.6,
+        doc="Minimum time separation which distinguishes between tracklets"
+    )
+    maxpointnum = lsst.pex.config.Field(
+        dtype=int,
+        default=1000,
+        doc="Maximum number of individual detections for a valid linkage"
+    )
 
 class LinkPurifyTask(lsst.pipe.base.PipelineTask):
     ConfigClass = LinkPurifyConfig
